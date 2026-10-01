@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Secrets / local config
+.env
+.env.*
+
+# Runtime data - never commit (uploaded exports, generated reports, logs, input spreadsheets)
+logs/
+*.log
+output/
+uploads/
+input/*
+!input/.gitkeep
+
+# Spreadsheets and exports anywhere in the repo (business data)
+*.xlsx
+*.xls
+*.csv

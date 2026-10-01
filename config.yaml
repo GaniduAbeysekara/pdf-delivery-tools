@@ -1,0 +1,20 @@
+request:
+  timeout: 30
+  retries: 3
+  delay: 0.5
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
+processing:
+  workers: 5
+  url_column: ""           # leave empty for auto-detection
+  max_pdf_bytes: 52428800  # 50 MB
+
+documents:
+  extensions:
+    - ".pdf"
+    - ".doc"
+    - ".docx"
+
+browser:
+  enabled: false           # set true to enable Playwright fallback
+  timeout: 30

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}PDF Delivery Tools{% endblock %}
+{% block head %}
+<style>
+  .hero h1 { font-size:1.7rem; letter-spacing:-.3px; } .hero p { color:var(--text2); margin-top:.3rem; }
+  .tools { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:1.2rem; margin-top:1.6rem; max-width:980px; }
+  .tool { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.4rem 1.5rem; display:flex; flex-direction:column; gap:.7rem; }
+  .tool h2 { font-size:1.15rem; } .tool p { color:var(--text2); line-height:1.5; flex:1; }
+  .tool ul { color:var(--text2); font-size:.84rem; padding-left:1.1rem; line-height:1.6; }
+  .go { align-self:flex-start; display:inline-block; padding:.6rem 1.2rem; border-radius:8px; background:var(--accent); color:#fff; font-weight:600; text-decoration:none; }
+  .go:hover { opacity:.9; }
+  .flow { margin-top:1.6rem; max-width:980px; color:var(--text2); font-size:.86rem; background:var(--surface); border:1px dashed var(--border); border-radius:10px; padding:1rem 1.2rem; }
+  .flow b { color:var(--text); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>PDF Delivery Tools</h1>
+  <p>Choose a tool to get started. You can switch between tools at any time from the sidebar without losing your work.</p>
+</div>
+<div class="tools">
+  <section class="tool">
+    <h2>Daily Backlog Dashboard</h2>
+    <p>Process the daily Reg Transform UI and Power BI exports, analyze the backlog, filter books, and generate the daily Excel report.</p>
+    <ul><li>Cross-references BookCategory to Book Type</li><li>Filter by Domain, API Result, Book Type</li><li>7-tab Excel report</li></ul>
+    <a class="go" href="/backlog">Open Daily Backlog Dashboard</a>
+  </section>
+  <section class="tool">
+    <h2>URL Analysis Tool</h2>
+    <p>Analyze URLs, detect document links, retrieve document metadata, and extract information such as page count, file type, language, and last modified date.</p>
+    <ul><li>Paste URLs, upload an Excel file, or receive books from the backlog</li><li>HTTP status, redirects, page count, size, language</li><li>One engine, one dashboard, one Excel export</li></ul>
+    <a class="go" href="/url-analysis">Open URL Analysis Tool</a>
+  </section>
+</div>
+<div class="flow"><b>Tip:</b> in the Daily Backlog Dashboard, tick books in the table and choose <b>Analyze Selected URLs</b> to send them straight to the URL Analysis Tool.</div>
+{% endblock %}

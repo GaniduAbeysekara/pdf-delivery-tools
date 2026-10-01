@@ -1,0 +1,487 @@
+{% extends "base.html" %}
+{% block title %}Daily Backlog Dashboard{% endblock %}
+{% block head %}
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  a { color:var(--accent); } nav a.on { color:var(--accent); font-weight:700; }
+  h1 { font-size:1.6rem; letter-spacing:-.3px; }
+  .sub { color:var(--text2); margin-top:.25rem; }
+  .head { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:.5rem; margin-bottom:1.2rem; }
+  .report-date { color:var(--text2); font-size:.9rem; } .report-date b { color:var(--text); }
+  .card-box { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; margin-bottom:1rem; }
+  .sec { font-size:.72rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); margin-bottom:.6rem; }
+  .btn { padding:.5rem 1.1rem; border-radius:7px; border:1px solid transparent; cursor:pointer; font-size:.88rem; font-weight:600; background:var(--accent); color:#fff; }
+  .btn:hover { opacity:.9; } .btn:disabled { background:var(--border); color:var(--gray); cursor:not-allowed; }
+  .btn.ghost { background:transparent; border-color:var(--border); color:var(--text); }
+  .btn.green { background:var(--green); color:#0a2a1e; }
+  /* upload */
+  .uploads { display:grid; grid-template-columns:1fr 1fr auto; gap:1rem; align-items:end; }
+  .up { border:1.5px dashed var(--border); border-radius:8px; padding:.8rem 1rem; background:var(--bg); }
+  .up label { display:block; font-weight:600; margin-bottom:.4rem; }
+  .up .hint { color:var(--gray); font-size:.78rem; }
+  .up .fname { color:var(--accent); font-size:.82rem; margin-top:.4rem; min-height:1.1em; word-break:break-all; }
+  .up input[type=file] { color:var(--text2); font-size:.8rem; max-width:100%; }
+  #steps { list-style:none; margin-top:.8rem; font-size:.85rem; color:var(--text2); }
+  #steps li { padding:.12rem 0; } #steps li.done::before { content:'\2713  '; color:var(--green); }
+  #steps li.active::before { content:'\25CF  '; color:var(--accent); }
+  .msg { margin-top:.8rem; padding:.7rem 1rem; border-radius:8px; font-size:.88rem; display:none; }
+  .msg.err { background:rgba(245,101,101,.1); border:1px solid var(--dev); color:#ffb4b4; display:block; }
+  .msg.ok { background:rgba(62,207,142,.1); border:1px solid var(--green); color:#9ae6c4; display:block; }
+  .msg.info { background:rgba(108,142,245,.1); border:1px solid var(--accent); color:#b6c6fb; display:block; }
+  #dash { display:none; }
+  /* data quality */
+  .dq { display:flex; flex-wrap:wrap; gap:.4rem 1.6rem; font-size:.82rem; color:var(--text2); }
+  .dq b { color:var(--text); } .dq .warn { color:var(--bau); }
+  .warnings { margin-top:.5rem; font-size:.8rem; color:var(--bau); }
+  /* cards */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.8rem; margin-bottom:1rem; }
+  .kpi { background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--neutral); border-radius:9px; padding:.8rem 1rem; cursor:pointer; text-align:left; color:inherit; font:inherit; }
+  .kpi:hover { background:var(--surface2); }
+  .kpi.bau { border-left-color:var(--bau); } .kpi.ver { border-left-color:var(--ver); } .kpi.dev { border-left-color:var(--dev); }
+  .kpi .v { font-size:1.7rem; font-weight:700; } .kpi .l { font-size:.72rem; text-transform:uppercase; letter-spacing:.6px; color:var(--text2); margin-top:.15rem; }
+  .kpi .s { font-size:.74rem; color:var(--gray); margin-top:.2rem; }
+  /* filters */
+  .fgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:.8rem; }
+  .fl { font-size:.74rem; color:var(--text2); margin-bottom:.25rem; display:block; }
+  .ms { position:relative; }
+  .ms-btn, .fin { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:.42rem .6rem; font-size:.85rem; text-align:left; }
+  .ms-btn { cursor:pointer; display:flex; justify-content:space-between; gap:.5rem; } .ms-btn span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ms-panel { display:none; position:absolute; z-index:20; top:100%; left:0; right:0; min-width:240px; margin-top:3px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:.5rem; box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  .ms.open .ms-panel { display:block; }
+  .ms-list { max-height:240px; overflow:auto; margin:.4rem 0; }
+  .ms-list label { display:flex; gap:.5rem; align-items:center; padding:.2rem .3rem; font-size:.83rem; cursor:pointer; border-radius:4px; }
+  .ms-list label:hover { background:rgba(255,255,255,.06); }
+  .ms-foot { display:flex; justify-content:space-between; font-size:.78rem; } .ms-foot button { background:none; border:none; color:var(--accent); cursor:pointer; }
+  .frow { display:flex; flex-wrap:wrap; gap:.6rem; align-items:end; margin-top:.9rem; }
+  .frow .grow { flex:1; min-width:240px; }
+  .chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.8rem; align-items:center; min-height:1.6rem; }
+  .chip { background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:.15rem .3rem .15rem .7rem; font-size:.78rem; display:inline-flex; gap:.4rem; align-items:center; }
+  .chip button { background:none; border:none; color:var(--text2); cursor:pointer; font-size:1rem; line-height:1; }
+  .count-line { font-size:.85rem; color:var(--text2); margin-top:.5rem; } .count-line b { color:var(--text); }
+  /* tabs */
+  .tabs { display:flex; flex-wrap:wrap; gap:.3rem; border-bottom:1px solid var(--border); margin-bottom:1rem; }
+  .tab { background:none; border:none; color:var(--text2); padding:.55rem .9rem; cursor:pointer; font-weight:600; font-size:.88rem; border-bottom:2px solid transparent; }
+  .tab.on { color:var(--text); border-bottom-color:var(--accent); } .tab .n { color:var(--gray); font-weight:400; margin-left:.3rem; }
+  /* charts */
+  .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:1rem; }
+  .bars .row { display:grid; grid-template-columns:minmax(120px,42%) 1fr 52px; gap:.5rem; align-items:center; padding:.18rem .2rem; font-size:.8rem; border-radius:4px; }
+  .bars .row.click { cursor:pointer; } .bars .row.click:hover { background:rgba(255,255,255,.05); }
+  .bars .lab { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text2); }
+  .bars .track { background:var(--surface2); height:10px; border-radius:5px; overflow:hidden; } .bars .fill { height:100%; background:var(--neutral); }
+  .bars .fill.bau { background:var(--bau); } .bars .fill.ver { background:var(--ver); } .bars .fill.dev { background:var(--dev); } .bars .fill.acc { background:var(--accent); }
+  .bars .num { text-align:right; font-weight:600; }
+  /* tables */
+  .tw { overflow:auto; max-height:560px; border:1px solid var(--border); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:.82rem; }
+  th { position:sticky; top:0; background:var(--surface2); text-align:left; padding:.5rem .7rem; font-size:.72rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); white-space:nowrap; cursor:pointer; user-select:none; z-index:1; }
+  td { padding:.4rem .7rem; border-top:1px solid rgba(46,51,80,.6); max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  tr:hover td { background:rgba(255,255,255,.03); }
+  td.n, th.n { text-align:right; }
+  .badge { display:inline-block; padding:.1rem .5rem; border-radius:4px; font-size:.7rem; font-weight:700; }
+  .badge.bau { background:rgba(246,201,69,.18); color:var(--bau); } .badge.ver { background:rgba(244,166,192,.18); color:var(--ver); }
+  .badge.dev { background:rgba(245,101,101,.18); color:var(--dev); }
+  .toolbar { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.6rem; align-items:center; margin-bottom:.6rem; }
+  .pager { display:flex; gap:.6rem; align-items:center; margin-top:.7rem; font-size:.82rem; color:var(--text2); }
+  .pager select { background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:5px; padding:.2rem; }
+  .empty { text-align:center; padding:2.5rem 1rem; color:var(--text2); } .empty .btn { margin-top:.8rem; }
+  .two { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:1rem; margin-top:1rem; }
+  .two > *, .charts > *, .cards > * { min-width:0; }
+  @media (max-width:900px) { .uploads, .two { grid-template-columns:minmax(0,1fr); } }
+  .selbar { display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; margin-bottom:.6rem; padding:.5rem .7rem; background:var(--surface2); border:1px solid var(--border); border-radius:8px; font-size:.85rem; }
+  .selbar .grow { flex:1; min-width:180px; color:var(--text2); } .selbar b { color:var(--text); } .selbar .err { color:#ffb4b4; }
+  td.chk, th.chk { width:34px; padding-left:.6rem; padding-right:.2rem; }
+  .actions { display:flex; flex-wrap:wrap; gap:.6rem; justify-content:flex-end; margin-top:1rem; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="wrap">
+  
+  <div class="head">
+    <div>
+      <h1>PDF Daily Backlog Dashboard</h1>
+      <p class="sub">Upload today's Reg Transform UI and Power BI exports to analyze the PDF backlog.</p>
+    </div>
+    <div class="report-date" id="report-date"></div>
+  </div>
+
+  <!-- Upload -->
+  <div class="card-box">
+    <div class="uploads">
+      <div class="up">
+        <label for="f-ui">Reg Transform UI Export</label>
+        <input type="file" id="f-ui" accept=".csv" />
+        <div class="hint">.csv &middot; StartPointStatus-DD-Mon-YYYY.csv</div>
+        <div class="fname" id="n-ui"></div>
+      </div>
+      <div class="up">
+        <label for="f-pbi">Power BI Details Table Export</label>
+        <input type="file" id="f-pbi" accept=".xlsx,.xls" />
+        <div class="hint">.xlsx, .xls &middot; Details Table</div>
+        <div class="fname" id="n-pbi"></div>
+      </div>
+      <button class="btn" id="gen" disabled>Generate Daily Report</button>
+    </div>
+    <ul id="steps"></ul>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash">
+    <div class="card-box"><div class="sec">Data quality</div><div class="dq" id="dq"></div><div class="warnings" id="warnings"></div></div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="card-box">
+      <div class="sec">Filters</div>
+      <div class="fgrid" id="fgrid"></div>
+      <div class="frow">
+        <div class="grow"><label class="fl" for="q">Search</label><input class="fin" id="q" type="search" placeholder="Search books (ID, title, domain, link, API Result)..." /></div>
+        <div id="datebox" style="display:none;gap:.5rem;align-items:end">
+          <div><label class="fl" id="date-label" for="d-from">Date from</label><input class="fin" type="date" id="d-from" /></div>
+          <div><label class="fl" for="d-to">to</label><input class="fin" type="date" id="d-to" /></div>
+        </div>
+        <button class="btn" id="apply">Apply Filters</button>
+        <button class="btn ghost" id="clear">Clear Filters</button>
+        <button class="btn ghost" id="reset">Reset Dashboard</button>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="count-line" id="countline"></div>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+
+    <!-- Overview -->
+    <div id="v-overview">
+      <div class="charts">
+        <div class="card-box"><div class="sec">Books by API Result</div><div class="bars" id="ch-api"></div></div>
+        <div class="card-box"><div class="sec">Top domains</div><div class="bars" id="ch-dom"></div></div>
+        <div class="card-box"><div class="sec">Book Type (all books)</div><div class="bars" id="ch-bt"></div></div>
+      </div>
+      <div class="two">
+        <div class="card-box"><div class="sec">Domain summary <span style="text-transform:none;letter-spacing:0">(click a row to filter)</span></div><div class="tw" id="dom-tbl" style="max-height:420px"></div></div>
+        <div class="card-box"><div class="sec">API Result summary <span style="text-transform:none;letter-spacing:0">(click to filter)</span></div><div class="tw" id="api-tbl" style="max-height:420px"></div></div>
+      </div>
+    </div>
+
+    <!-- Table views -->
+    <div id="v-table" style="display:none">
+      <div class="card-box">
+        <div class="toolbar">
+          <div><span class="sec" style="margin:0">Book Backlog</span> <span class="count-line" id="tbl-count" style="margin-left:.6rem"></span></div>
+          <div style="display:flex;gap:.5rem;position:relative">
+            <div class="ms" id="colsel"></div>
+            <button class="btn ghost" id="copy">Copy page</button>
+          </div>
+        </div>
+        <div class="selbar">
+          <span class="grow" id="selcount"></span>
+          <button class="btn" id="analyze-sel" disabled>Analyze Selected URLs</button>
+          <button class="btn ghost" id="dl-selected" disabled>Download Selected</button>
+          <button class="btn ghost" id="sel-filtered">Select all in filtered view</button>
+          <button class="btn ghost" id="sel-clear">Clear selection</button>
+        </div>
+        <div class="tw" id="tbl"></div>
+        <div class="pager" id="pager"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn ghost" id="dl-filtered">Download Current Filtered Data</button>
+      <button class="btn green" id="dl-report" disabled>Download Excel Report</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CAT = {change:'bau', potential:'bau', evc_open:'ver', evc:'ver', dev:'dev', other:''};
+const CAT_TEXT = {bau:'BAU review', ver:'Verification', dev:'Dev attention'};
+const VIEWS = [['overview','Overview'],['all','All Books'],['change','Change & Potential Change'],
+               ['evc_open','EVC Open Task'],['evc','External Verified Change'],['dev','Dev Attention']];
+const CARDS = [['total','Total Books','', 'overview'],['pdf_other','PDF / Other','', 'all'],['change','Change','bau','change'],
+  ['potential','Potential Changes','bau','change'],['evc_open','EVC Open Task','ver','evc_open'],
+  ['evc','External Verified','ver','evc'],['dev','Dev Attention','dev','dev']];
+
+let S = null;   // {rid, meta, sel:{}, pending:{}, q, dFrom, dTo, view, page, size, sort, dir, cols}
+let reqN = 0, debounce = null;
+
+/* ---------- upload ---------- */
+const fUi = $('f-ui'), fPbi = $('f-pbi'), gen = $('gen');
+function syncUpload() {
+  $('n-ui').textContent = fUi.files[0] ? fUi.files[0].name : '';
+  $('n-pbi').textContent = fPbi.files[0] ? fPbi.files[0].name : '';
+  gen.disabled = !(fUi.files[0] && fPbi.files[0]);
+}
+fUi.onchange = fPbi.onchange = syncUpload;
+function showMsg(kind, text) { const m = $('msg'); m.className = 'msg ' + kind; m.textContent = text; }
+function renderSteps(steps, running) {
+  $('steps').innerHTML = steps.map((s, i) => `<li class="${i === steps.length - 1 && running ? 'active' : 'done'}">${esc(s)}</li>`).join('');
+}
+gen.onclick = async () => {
+  gen.disabled = true; showMsg('info', 'Processing...'); $('steps').innerHTML = '<li class="active">Uploading files...</li>';
+  const form = new FormData(); form.append('ui', fUi.files[0]); form.append('powerbi', fPbi.files[0]);
+  try {
+    const r = await fetch('/api/backlog/generate', {method:'POST', body:form}); const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Upload failed');
+    pollJob(d.job_id);
+  } catch (e) { showMsg('err', e.message); $('steps').innerHTML = ''; syncUpload(); }
+};
+let dashShown = false;
+function pollJob(id) {
+  dashShown = false;
+  const t = setInterval(async () => {
+    let d; try { d = await (await fetch('/api/backlog/status/' + id)).json(); } catch { return; }
+    const excelRunning = d.state === 'ready' && d.excel.state === 'pending';
+    renderSteps(d.steps, d.state === 'running' || excelRunning);
+    if (d.state === 'error') { clearInterval(t); showMsg('err', d.error); syncUpload(); return; }
+    if (d.state === 'ready' && !dashShown) { dashShown = true; initDash(id, d.report); }
+    if (d.state === 'ready') {
+      const btn = $('dl-report');
+      if (d.excel.state === 'done') { clearInterval(t); btn.disabled = false; showMsg('ok', 'Report generated successfully'); syncUpload(); }
+      else if (d.excel.state === 'error') { clearInterval(t); showMsg('err', d.excel.error + ' The dashboard is still usable.'); syncUpload(); }
+      else showMsg('info', 'Dashboard ready. The Excel report is still being prepared...');
+    }
+  }, 700);
+}
+
+/* ---------- multiselect ---------- */
+const multis = {};
+function makeMulti(el, key, label, options, allLabel) {
+  el.classList.add('ms');
+  el.innerHTML = `<label class="fl">${esc(label)}</label><button type="button" class="ms-btn"><span></span><span>&#9662;</span></button>
+    <div class="ms-panel"><input class="fin" placeholder="Search..." /><div class="ms-list"></div>
+    <div class="ms-foot"><button type="button" data-a="shown">Select shown</button><button type="button" data-a="clear">Clear</button></div></div>`;
+  const btn = el.querySelector('.ms-btn'), txt = btn.firstElementChild, list = el.querySelector('.ms-list'), search = el.querySelector('input');
+  function paint() {
+    const sel = new Set(S.pending[key] || []), q = search.value.toLowerCase();
+    const shown = options.filter(o => !q || o.toLowerCase().includes(q));
+    list.innerHTML = shown.slice(0, 300).map(o => `<label><input type="checkbox" value="${esc(o)}" ${sel.has(o) ? 'checked' : ''}/> <span>${esc(o)}</span></label>`).join('')
+      + (shown.length > 300 ? `<div class="hint" style="padding:.3rem;color:var(--gray)">${shown.length - 300} more - refine your search</div>` : '')
+      + (!shown.length ? '<div style="padding:.3rem;color:var(--gray)">No matches</div>' : '');
+    const n = sel.size; txt.textContent = n === 0 ? allLabel : n === 1 ? [...sel][0] : n + ' selected';
+  }
+  list.onchange = e => {
+    const v = e.target.value, cur = new Set(S.pending[key] || []);
+    e.target.checked ? cur.add(v) : cur.delete(v); S.pending[key] = [...cur]; paint();
+  };
+  search.oninput = paint;
+  el.querySelector('.ms-foot').onclick = e => {
+    const a = e.target.dataset.a; if (!a) return;
+    if (a === 'clear') S.pending[key] = [];
+    else { const q = search.value.toLowerCase(); S.pending[key] = [...new Set([...(S.pending[key] || []), ...options.filter(o => !q || o.toLowerCase().includes(q)).slice(0, 2000)])]; }
+    paint();
+  };
+  btn.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ms.open').forEach(m => m !== el && m.classList.remove('open')); el.classList.toggle('open'); if (el.classList.contains('open')) search.focus(); };
+  el.querySelector('.ms-panel').onclick = e => e.stopPropagation();
+  multis[key] = {paint};
+  paint();
+}
+document.addEventListener('click', () => document.querySelectorAll('.ms.open').forEach(m => m.classList.remove('open')));
+
+/* ---------- dashboard ---------- */
+function initDash(rid, meta, restore) {
+  S = {rid, meta, sel:{}, pending:{}, q:'', dFrom:'', dTo:'', view:'overview', page:1, size:50, sort:'', dir:'asc', cols:[...meta.columns.default], selected:new Set()};
+  if (restore) {
+    Object.assign(S, {sel: restore.sel || {}, q: restore.q || '', dFrom: restore.dFrom || '', dTo: restore.dTo || '', view: restore.view || 'overview',
+      page: restore.page || 1, size: restore.size || 50, sort: restore.sort || '', dir: restore.dir || 'asc', selected: new Set(restore.selected || [])});
+    S.pending = JSON.parse(JSON.stringify(S.sel));
+    const ok = (restore.cols || []).filter(c => meta.columns.all.includes(c)); if (ok.length) S.cols = ok;
+  }
+  $('report-date').innerHTML = 'Report date: <b>' + esc(meta.report_date) + '</b>';
+  const st = meta.stats;
+  const dq = [['PBI records', st.powerbi_rows], ['UI records', st.ui_rows], ['BookCategory matched', st.matched],
+    ['Unmatched', st.unmatched], ['Duplicate UI identifiers', st.duplicate_ui_keys], ['Blank BookCategory (Unknown)', st.blank_category]];
+  const warnLabels = ['Unmatched', 'Duplicate UI identifiers'];
+  $('dq').innerHTML = dq.map(([l, v]) => `<span>${l}: <b class="${v && warnLabels.includes(l) ? 'warn' : ''}">${Number(v).toLocaleString()}</b></span>`).join('')
+    + `<span>Matched on: <b>${esc(st.match_ui_key)}</b> &harr; <b>${esc(st.match_pbi_key)}</b> (${esc(st.match_source)})</span>`
+    + '<span>Book Type source: <b>Reg Transform BookCategory</b></span>';
+  $('warnings').innerHTML = meta.warnings.map(w => w.startsWith('LOW MATCH')
+    ? `<div class="msg err" style="margin:.6rem 0"><b>${esc(w.split(':')[0])}:</b>${esc(w.slice(w.indexOf(':') + 1))}</div>` : '&bull; ' + esc(w)).join('<br>');
+  const fg = $('fgrid'); fg.innerHTML = '';
+  const add = (key, label, opts, all) => { const d = document.createElement('div'); fg.appendChild(d); makeMulti(d, key, label, opts, all); };
+  add('domain', 'Domain', meta.options.domains, 'All Domains');
+  add('api', 'API Result', meta.options.apis, 'All API Results');
+  add('book_type', 'Book Type', meta.options.book_types, 'All Book Types');
+  for (const [label, opts] of Object.entries(meta.options.extra)) add('f_' + label, label, opts, 'All ' + label);
+  const hasDate = !!meta.options.date_min; $('datebox').style.display = hasDate ? 'flex' : 'none';
+  $('date-label').textContent = hasDate ? meta.options.date_label + ' from' : '';
+  $('d-from').value = S.dFrom; $('d-to').value = S.dTo; $('q').value = S.q;
+  colSelector();
+  $('dash').style.display = 'block';
+  refresh();
+}
+function colSelector() {
+  const el = $('colsel'); el.className = 'ms'; el.innerHTML = '<button type="button" class="ms-btn" style="width:auto"><span>Columns</span><span>&#9662;</span></button><div class="ms-panel" style="left:auto;right:0;width:280px"><div class="ms-list"></div></div>';
+  const list = el.querySelector('.ms-list'), all = S.meta.columns.all;
+  list.innerHTML = all.map(c => `<label><input type="checkbox" value="${esc(c)}" ${S.cols.includes(c) ? 'checked' : ''}/> <span>${esc(c)}</span></label>`).join('');
+  list.onchange = () => { S.cols = [...list.querySelectorAll('input:checked')].map(i => i.value); if (!S.cols.length) S.cols = [...S.meta.columns.default]; refresh(); };
+  el.querySelector('.ms-btn').onclick = e => { e.stopPropagation(); el.classList.toggle('open'); };
+  el.querySelector('.ms-panel').onclick = e => e.stopPropagation();
+}
+function params(forDownload) {
+  const p = new URLSearchParams();
+  for (const [k, vs] of Object.entries(S.sel)) vs.forEach(v => p.append(k, v));
+  if (S.q) p.set('q', S.q); if (S.dFrom) p.set('date_from', S.dFrom); if (S.dTo) p.set('date_to', S.dTo);
+  p.set('view', S.view);
+  if (!forDownload) { p.set('page', S.page); p.set('size', S.size); if (S.sort) { p.set('sort', S.sort); p.set('dir', S.dir); } S.cols.forEach(c => p.append('col', c)); }
+  return p;
+}
+async function refresh() {
+  const n = ++reqN;
+  let d; try { const r = await fetch(`/api/backlog/${S.rid}/query?` + params()); d = await r.json(); if (!r.ok) throw new Error(d.error); }
+  catch (e) { showMsg('err', e.message || 'Could not load data.'); return; }
+  if (n !== reqN) return;   // stale response
+  render(d);
+  saveState();
+}
+function applyPending() { S.sel = {}; for (const [k, v] of Object.entries(S.pending)) if (v.length) S.sel[k] = [...v]; S.q = $('q').value.trim(); S.dFrom = $('d-from').value; S.dTo = $('d-to').value; S.page = 1; refresh(); }
+function syncMultis() { Object.values(multis).forEach(m => m.paint()); }
+function clearFilters() { S.sel = {}; S.pending = {}; S.q = ''; S.dFrom = S.dTo = ''; $('q').value = $('d-from').value = $('d-to').value = ''; S.page = 1; syncMultis(); }
+function setFilter(key, value) { S.sel[key] = [value]; S.pending[key] = [value]; S.page = 1; syncMultis(); refresh(); }
+$('apply').onclick = applyPending;
+$('clear').onclick = () => { clearFilters(); refresh(); };
+$('reset').onclick = () => { clearFilters(); S.selected.clear(); selMsg = ''; S.view = 'overview'; S.sort = ''; S.dir = 'asc'; S.size = 50; S.cols = [...S.meta.columns.default]; colSelector(); refresh(); };
+$('q').oninput = () => { clearTimeout(debounce); debounce = setTimeout(() => { S.q = $('q').value.trim(); S.page = 1; refresh(); }, 350); };
+$('q').onkeydown = e => { if (e.key === 'Enter') { clearTimeout(debounce); applyPending(); } };
+
+/* ---------- render ---------- */
+function bars(el, rows, opts = {}) {
+  const max = Math.max(1, ...rows.map(r => r.count));
+  el.innerHTML = rows.length ? rows.map(r => `<div class="row ${opts.click ? 'click' : ''}" data-v="${esc(r.label)}" title="${esc(r.label)}: ${r.count.toLocaleString()}">
+    <div class="lab">${esc(r.label)}</div><div class="track"><div class="fill ${r.cls || ''}" style="width:${(r.count / max * 100).toFixed(1)}%"></div></div>
+    <div class="num">${r.count.toLocaleString()}</div></div>`).join('') : '<div class="empty" style="padding:1rem">No data</div>';
+  if (opts.click) el.querySelectorAll('.row').forEach(r => r.onclick = () => opts.click(r.dataset.v));
+}
+function render(d) {
+  $('cards').innerHTML = CARDS.map(([k, label, cls, view]) => {
+    const c = d.cards[k], sub = k === 'total' ? (d.total_filtered !== d.total_all ? `filtered from ${d.total_all.toLocaleString()}` : 'all records')
+      : k === 'pdf_other' ? 'action-list scope' : `${c.action.toLocaleString()} in action list`;
+    return `<button class="kpi ${cls}" data-view="${view}"><div class="v">${c.count.toLocaleString()}</div><div class="l">${label}</div><div class="s">${sub}</div></button>`;
+  }).join('');
+  $('cards').querySelectorAll('.kpi').forEach(b => b.onclick = () => { S.view = b.dataset.view; S.page = 1; refresh(); });
+
+  const chips = [];
+  const labels = {domain:'Domain', api:'API Result', book_type:'Book Type'};
+  for (const [k, vs] of Object.entries(S.sel)) vs.forEach(v => chips.push([labels[k] || k.slice(2), v, () => { S.sel[k] = S.sel[k].filter(x => x !== v); S.pending[k] = [...S.sel[k]]; if (!S.sel[k].length) delete S.sel[k]; syncMultis(); S.page = 1; refresh(); }]));
+  if (S.q) chips.push(['Search', S.q, () => { S.q = ''; $('q').value = ''; refresh(); }]);
+  if (S.dFrom || S.dTo) chips.push(['Date', (S.dFrom || '...') + ' to ' + (S.dTo || '...'), () => { S.dFrom = S.dTo = ''; $('d-from').value = $('d-to').value = ''; refresh(); }]);
+  const ch = $('chips'); ch.innerHTML = chips.length ? chips.map((c, i) => `<span class="chip">${esc(c[0])}: ${esc(c[1])} <button data-i="${i}" aria-label="Remove filter">&times;</button></span>`).join('') + '<button class="btn ghost" id="clr2" style="padding:.15rem .7rem">Clear All Filters</button>' : '<span style="color:var(--gray);font-size:.8rem">No active filters</span>';
+  ch.querySelectorAll('.chip button').forEach(b => b.onclick = chips[+b.dataset.i][2]);
+  if ($('clr2')) $('clr2').onclick = () => { clearFilters(); refresh(); };
+  $('countline').innerHTML = `Showing <b>${d.total_filtered.toLocaleString()}</b> of <b>${d.total_all.toLocaleString()}</b> books`;
+
+  $('tabs').innerHTML = VIEWS.map(([k, l]) => `<button class="tab ${S.view === k ? 'on' : ''}" data-v="${k}">${l}${k === 'overview' ? '' : `<span class="n">${(d.view_counts[k] ?? 0).toLocaleString()}</span>`}</button>`).join('');
+  $('tabs').querySelectorAll('.tab').forEach(b => b.onclick = () => { S.view = b.dataset.v; S.page = 1; refresh(); });
+
+  const empty = d.total_filtered === 0;
+  $('v-overview').style.display = S.view === 'overview' ? 'block' : 'none';
+  $('v-table').style.display = S.view === 'overview' ? 'none' : 'block';
+  if (S.view === 'overview') renderOverview(d, empty); else renderTable(d);
+}
+function emptyBox() { return '<div class="empty">No books match the selected filters.<br><button class="btn ghost" data-clear>Clear Filters</button></div>'; }
+function wireClear(el) { el.querySelectorAll('[data-clear]').forEach(b => b.onclick = () => { clearFilters(); refresh(); }); }
+function renderOverview(d, empty) {
+  if (empty) { ['ch-api', 'ch-dom', 'ch-bt', 'dom-tbl', 'api-tbl'].forEach(i => { $(i).innerHTML = emptyBox(); wireClear($(i)); }); return; }
+  bars($('ch-api'), d.apis.slice(0, 15).map(a => ({label: a.label, count: a.count, cls: CAT[a.category]})), {click: v => setFilter('api', v)});
+  bars($('ch-dom'), d.domains.slice(0, 12).map(x => ({label: x.domain, count: x.total, cls: 'acc'})), {click: v => setFilter('domain', v)});
+  bars($('ch-bt'), d.book_types.map(b => ({label: b.label, count: b.count})), {click: v => setFilter('book_type', v)});
+  $('dom-tbl').innerHTML = `<table><thead><tr><th>Domain</th><th class="n">Total</th><th class="n">Change</th><th class="n">Potential</th><th class="n">EVC</th><th class="n">Dev</th></tr></thead><tbody>`
+    + d.domains.map(r => `<tr class="click" data-d="${esc(r.domain)}" style="cursor:pointer"><td title="${esc(r.domain)}">${esc(r.domain)}</td><td class="n">${r.total.toLocaleString()}</td><td class="n">${r.change}</td><td class="n">${r.potential}</td><td class="n">${r.evc}</td><td class="n">${r.dev}</td></tr>`).join('') + '</tbody></table>';
+  $('dom-tbl').querySelectorAll('tr[data-d]').forEach(r => r.onclick = () => setFilter('domain', r.dataset.d));
+  $('api-tbl').innerHTML = `<table><thead><tr><th>API Result</th><th class="n">Count</th></tr></thead><tbody>`
+    + d.apis.map(r => `<tr data-a="${esc(r.label)}" style="cursor:pointer"><td title="${esc(r.label)}">${CAT[r.category] ? `<span class="badge ${CAT[r.category]}">${CAT_TEXT[CAT[r.category]]}</span> ` : ''}${esc(r.label)}</td><td class="n">${r.count.toLocaleString()}</td></tr>`).join('') + '</tbody></table>';
+  $('api-tbl').querySelectorAll('tr[data-a]').forEach(r => r.onclick = () => setFilter('api', r.dataset.a));
+}
+let lastRows = [], lastCols = [];
+function renderTable(d) {
+  lastRows = d.rows; lastCols = d.columns;
+  const pages = Math.max(1, Math.ceil(d.view_total / S.size));
+  $('tbl-count').textContent = `Showing ${d.view_total.toLocaleString()} records`;
+  if (d.view_total === 0) {
+    $('tbl').innerHTML = d.total_filtered === 0 ? emptyBox() : '<div class="empty">No records found for the selected filters in this view.<br><button class="btn ghost" data-clear>Clear Filters</button></div>';
+    wireClear($('tbl')); $('pager').innerHTML = ''; updateSelBar(); return;
+  }
+  const arrow = c => S.sort === c ? (S.dir === 'asc' ? ' &#9650;' : ' &#9660;') : '';
+  const pageIds = d.rows.map(r => r._row), allOn = pageIds.length && pageIds.every(i => S.selected.has(i));
+  $('tbl').innerHTML = `<table><thead><tr><th class="chk"><input type="checkbox" id="selpage" ${allOn ? 'checked' : ''} aria-label="Select all books on this page"/></th><th>Flag</th>` + d.columns.map(c => `<th data-c="${esc(c)}">${esc(c)}${arrow(c)}</th>`).join('') + '</tr></thead><tbody>'
+    + d.rows.map(r => `<tr><td class="chk"><input type="checkbox" class="rs" data-i="${r._row}" ${S.selected.has(r._row) ? 'checked' : ''} aria-label="Select book"/></td><td>${CAT[r._cat] ? `<span class="badge ${CAT[r._cat]}">${CAT_TEXT[CAT[r._cat]]}</span>` : ''}</td>` + d.columns.map(c => {
+        const v = r[c] ?? '';
+        const cell = /^https?:\/\//i.test(String(v)) ? `<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>` : esc(v);
+        return `<td title="${esc(v)}">${cell}</td>`; }).join('') + '</tr>').join('') + '</tbody></table>';
+  $('selpage').onchange = e => { pageIds.forEach(i => e.target.checked ? S.selected.add(i) : S.selected.delete(i)); updateSelBar(); saveState(); };
+  $('tbl').querySelectorAll('.rs').forEach(cb => cb.onchange = () => { const i = +cb.dataset.i; cb.checked ? S.selected.add(i) : S.selected.delete(i); $('selpage').checked = pageIds.every(x => S.selected.has(x)); updateSelBar(); saveState(); });
+  $('tbl').querySelectorAll('th[data-c]').forEach(th => th.onclick = () => { const c = th.dataset.c; if (S.sort === c) S.dir = S.dir === 'asc' ? 'desc' : 'asc'; else { S.sort = c; S.dir = 'asc'; } refresh(); });
+  $('pager').innerHTML = `<button class="btn ghost" id="pp" ${S.page <= 1 ? 'disabled' : ''}>Prev</button><span>Page ${S.page} of ${pages}</span><button class="btn ghost" id="pn" ${S.page >= pages ? 'disabled' : ''}>Next</button>
+    <span>Rows per page <select id="ps">${[25, 50, 100, 250].map(n => `<option ${n === S.size ? 'selected' : ''}>${n}</option>`).join('')}</select></span>`;
+  $('pp').onclick = () => { S.page--; refresh(); }; $('pn').onclick = () => { S.page++; refresh(); };
+  $('ps').onchange = e => { S.size = +e.target.value; S.page = 1; refresh(); };
+  updateSelBar();
+}
+$('copy').onclick = async () => {
+  const tsv = [lastCols.join('\t')].concat(lastRows.map(r => lastCols.map(c => String(r[c] ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t'))).join('\n');
+  try { await navigator.clipboard.writeText(tsv); $('copy').textContent = 'Copied'; } catch { $('copy').textContent = 'Copy failed'; }
+  setTimeout(() => $('copy').textContent = 'Copy page', 1500);
+};
+$('dl-filtered').onclick = () => { window.location.href = `/api/backlog/${S.rid}/download/filtered?` + params(true); };
+$('dl-report').onclick = () => { window.location.href = `/api/backlog/${S.rid}/download/report`; };
+
+/* ---------- selection, hand-off to the URL Analysis Tool, state ---------- */
+let selMsg = '';
+function updateSelBar() {
+  const n = S.selected.size;
+  $('selcount').innerHTML = (n ? `<b>${n.toLocaleString()} book${n === 1 ? '' : 's'} selected</b>` : 'No books selected - tick books in the table to analyze their URLs')
+    + (selMsg ? ` <span class="err">${esc(selMsg)}</span>` : '');
+  $('analyze-sel').disabled = n === 0;
+  $('dl-selected').disabled = n === 0;
+  $('dl-selected').textContent = n ? `Download Selected (${n.toLocaleString()})` : 'Download Selected';
+}
+$('sel-clear').onclick = () => { S.selected.clear(); selMsg = ''; updateSelBar(); saveState(); refresh(); };
+$('sel-filtered').onclick = async () => {
+  try {
+    const r = await fetch(`/api/backlog/${S.rid}/ids?` + params(true)); const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    d.rows.forEach(i => S.selected.add(i)); selMsg = d.truncated ? `Only the first ${d.rows.length.toLocaleString()} books were selected.` : '';
+    updateSelBar(); saveState(); refresh();
+  } catch (e) { selMsg = e.message; updateSelBar(); }
+};
+$('analyze-sel').onclick = async () => {
+  if (!S.selected.size) return;
+  $('analyze-sel').disabled = true; selMsg = ''; saveState();
+  try {
+    const r = await fetch(`/api/backlog/${S.rid}/send-to-url-tool`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rows: [...S.selected]})});
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not send the selected books.');
+    window.location.href = '/url-analysis?transfer=' + encodeURIComponent(d.transfer_id);
+  } catch (e) { selMsg = e.message; updateSelBar(); $('analyze-sel').disabled = false; }
+};
+$('dl-selected').onclick = async () => {
+  if (!S.selected.size) return;
+  try {
+    const r = await fetch(`/api/backlog/${S.rid}/download/selected`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rows: [...S.selected]})});
+    if (!r.ok) throw new Error((await r.json()).error || 'Download failed');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob());
+    a.download = `Backlog_${S.meta.report_date}_selected.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch (e) { selMsg = e.message; updateSelBar(); }
+};
+function saveState() {
+  if (!S) return;
+  try {
+    sessionStorage.setItem('backlogState', JSON.stringify({rid: S.rid, sel: S.sel, q: S.q, dFrom: S.dFrom, dTo: S.dTo, view: S.view,
+      page: S.page, size: S.size, sort: S.sort, dir: S.dir, cols: S.cols, selected: [...S.selected]}));
+  } catch (e) { /* storage unavailable: state just won't survive navigation */ }
+}
+(async function restore() {
+  let st = null; try { st = JSON.parse(sessionStorage.getItem('backlogState') || 'null'); } catch (e) {}
+  if (!st || !st.rid) return;
+  try {
+    const r = await fetch(`/api/backlog/${st.rid}/meta`);
+    if (!r.ok) { sessionStorage.removeItem('backlogState'); return; }
+    const d = await r.json();
+    dashShown = true; initDash(st.rid, d.report, st);
+    showMsg('info', 'Restored your previous dashboard - no need to upload the files again.');
+    if (d.excel.state === 'done') $('dl-report').disabled = false; else if (d.excel.state === 'pending') pollJob(st.rid);
+  } catch (e) { /* server unreachable: user can generate again */ }
+})();
+</script>
+{% endblock %}

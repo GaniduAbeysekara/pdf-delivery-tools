@@ -1,0 +1,34 @@
+# Core HTTP
+requests>=2.31.0
+urllib3>=2.0.0
+
+# HTML parsing
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
+# PDF processing
+pypdf>=4.0.0
+
+# Language detection
+langdetect>=1.0.9
+
+# Excel
+openpyxl>=3.1.0
+pandas>=2.0.0
+xlrd>=2.0.0
+
+# Web app
+flask>=3.0.0
+
+# CLI / progress
+tqdm>=4.66.0
+
+# Config
+pyyaml>=6.0.0
+
+# Optional browser fallback (uncomment to enable)
+# playwright>=1.40.0
+
+# Dev / testing
+pytest>=7.4.0
+pytest-mock>=3.12.0

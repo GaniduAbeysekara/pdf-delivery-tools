@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{% block title %}PDF Delivery Tools{% endblock %}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#0f1117; --surface:#1a1d27; --surface2:#22263a; --border:#2e3350;
+    --accent:#6c8ef5; --accent2:#5b7bf0; --green:#3ecf8e; --red:#f56565; --yellow:#f6ad55;
+    --gray:#8892b0; --text:#e2e8f0; --text2:#a0aec0;
+    --dev:#f56565; --bau:#f6c945; --ver:#f4a6c0; --neutral:#6b7a9e;
+  }
+  body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
+  a { color:var(--accent); }
+  .app { display:flex; min-height:100vh; }
+  .side { width:236px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border);
+          padding:1.2rem .9rem; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:.2rem; }
+  .brand { font-weight:800; letter-spacing:.8px; font-size:.82rem; padding:.2rem .6rem 1rem; line-height:1.3; }
+  .brand small { display:block; font-weight:500; letter-spacing:0; color:var(--text2); font-size:.74rem; margin-top:.15rem; }
+  .navh { font-size:.68rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--gray); padding:.4rem .6rem; }
+  .side a.nav { display:block; padding:.55rem .7rem; border-radius:7px; color:var(--text2); text-decoration:none; font-weight:600; font-size:.88rem; }
+  .side a.nav:hover { background:var(--surface2); color:var(--text); }
+  .side a.nav.on { background:var(--surface2); color:var(--text); box-shadow:inset 3px 0 0 var(--accent); }
+  .side a.nav.sub { margin-left:1rem; font-weight:500; font-size:.82rem; padding:.4rem .7rem; }
+  .main { flex:1; min-width:0; padding:1.6rem 1.6rem 4rem; }
+  @media (max-width:800px) {
+    .app { flex-direction:column; } .side { width:auto; height:auto; position:static; flex-direction:row; flex-wrap:wrap; align-items:center; }
+    .brand { padding:.2rem .6rem; } .navh { display:none; } .side a.nav.sub { margin-left:0; }
+  }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% set p = request.path %}
+<div class="app">
+  <aside class="side">
+    <div class="brand">PDF DELIVERY TOOLS<small>Daily operations toolkit</small></div>
+    <div class="navh">Navigation</div>
+    <a class="nav {{ 'on' if p == '/' }}" href="/">Home</a>
+    <a class="nav {{ 'on' if p.startswith('/backlog') }}" href="/backlog">Daily Backlog Dashboard</a>
+    <a class="nav {{ 'on' if p.startswith('/url-analysis') }}" href="/url-analysis">URL Analysis</a>
+  </aside>
+  <main class="main">
+{% block content %}{% endblock %}
+  </main>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>
