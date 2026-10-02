@@ -20,18 +20,24 @@ from urllib.parse import urlparse
 import requests
 
 from ..backlog.normalize import extract_domain
-from ..html_analyzer import find_candidate_links, find_document_links
+from ..html_analyzer import (detect_bot_protection, document_base_url, find_candidate_links, find_document_links,
+                             find_embedded_documents)
 from ..logger import log
 from .browser_fallback import PlaywrightRenderer
-from .document_analyzer import (DIRECT_TYPES, detect_content_type, human_size, inspect_document,
-                                parse_http_date)
+from .document_analyzer import (DIRECT_TYPES, detect_content_type, disposition_filename, human_size,
+                                inspect_document, parse_http_date)
 from .http_analyzer import (CHUNK, HTTP_MESSAGES, REDIRECT_CODES, AnalyzerSettings, HTTPAnalyzer, header)
-from .inputs import url_key
+from ..utils import url_extension
+from .inputs import document_key, url_key
 from .models import BookRecord, URLAnalysisResult
 
 SMALL_BODY_CAP = 2 * 1024 * 1024
-MAX_PROBES = 8          # unverified "download" style links checked per landing page
+MAX_FRAMES = 6          # frames (iframe/embed/object) fetched per page to see whether they hold a document
+MAX_FRAME_DEPTH = 2     # page -> frame page -> frame page; deeper nesting is not followed
+MAX_NESTED_PROBES = 4   # download-style links verified inside a frame page
+MAX_PROBES = 12         # unverified "download" style links checked per landing page (best candidates first)
 MAX_LISTED_LINKS = 200
+MAX_SUPPLIED_HTML = 5 * 1024 * 1024
 Records = Iterable["BookRecord | dict"]
 
 
@@ -201,7 +207,7 @@ class URLAnalyzer:
             clen = int(clen_raw) if clen_raw.isdigit() else None
             it = resp.iter_content(CHUNK)
             head = next(it, b"") or b""
-            r.content_type = detect_content_type(ct_raw, final_url, head)
+            r.content_type = detect_content_type(ct_raw, final_url, head, disposition_filename(header(resp.headers, "Content-Disposition")))
             r.direct_document = r.content_type in DIRECT_TYPES
             modified = parse_http_date(header(resp.headers, "Last-Modified"))
             cap = self.s.max_download_bytes
@@ -260,30 +266,80 @@ class URLAnalyzer:
             resp.close()
 
     # ── landing pages ───────────────────────────────────────────────────────
-    def _extract_links(self, html: str, base_url: str, deadline: float) -> list[str]:
-        """Unique document URLs on a page: extension-confirmed links, plus download-style links whose
-        destination is verified (by Content-Type) to be a document."""
-        urls: list[str] = []
-        seen: set[str] = set()
+    def _extract_links(self, html: str, base_url: str, deadline: float, depth: int = 0) -> tuple[list[str], dict[str, set[str]]]:
+        """Unique document URLs on a page and HOW each was found.
 
-        def add(u: str) -> None:
-            k = url_key(u)
-            if k not in seen:
-                seen.add(k)
+        Sources: documents shown in frames (iframe / embed / object - viewers unwrapped, the frame address verified by
+        what the server returns, and an HTML page inside a frame searched too), extension-confirmed links and buttons,
+        and download-style links whose destination is verified (by Content-Type) to be a document.
+        Returns (urls, {url: {"iframe"} | {"link"} | {"iframe", "link"}}). The same document reached two ways is ONE url."""
+        urls: list[str] = []
+        how: dict[str, set[str]] = {}
+
+        def add(u: str, via: str) -> None:
+            k = document_key(u)
+            if k not in how:
+                how[k] = set()
                 urls.append(u)
+            how[k].add(via)
 
         try:
-            for link in find_document_links(html, base_url):
-                add(link.url)
-            for cand in find_candidate_links(html, base_url, known=set(urls))[:MAX_PROBES]:
-                if url_key(cand) in seen:
+            if depth < MAX_FRAME_DEPTH:
+                for frame in find_embedded_documents(html, base_url, MAX_FRAMES):
+                    self._read_frame(frame["target"], deadline, depth, add)
+            for link in find_document_links(html, base_url, include_frames=False):
+                add(link.url, "link")
+            probes = MAX_PROBES if depth == 0 else MAX_NESTED_PROBES
+            for cand in find_candidate_links(html, base_url, known=set(urls), include_frames=False)[:probes]:
+                if document_key(cand) in how:
                     continue
                 probed = self._probe(cand, deadline)
                 if probed and probed[0] in DIRECT_TYPES:
-                    add(probed[1])
+                    add(probed[1], "link")
         except Exception as e:
             log.warning("Link discovery failed for %s: %s", base_url, e)
-        return urls
+        return urls, {u: how[document_key(u)] for u in urls}
+
+    def _read_frame(self, target: str, deadline: float, depth: int, add: Callable[[str, str], None]) -> None:
+        """One frame address: a document extension is taken as is; anything else is fetched to see what it is
+        (a document served without an extension, or an HTML page that contains the document)."""
+        if url_extension(target) in (".pdf", ".doc", ".docx"):
+            add(target, "iframe")
+            return
+        frame = self._fetch_frame(target, deadline)
+        if not frame:
+            return
+        ctype, final, inner = frame
+        if ctype in DIRECT_TYPES:
+            add(final, "iframe")
+        elif ctype == "HTML" and inner:
+            found, _ = self._extract_links(inner, document_base_url(inner, final), deadline, depth + 1)
+            for u in found:
+                add(u, "iframe")
+
+    def _fetch_frame(self, url: str, deadline: float) -> tuple[str, str, str] | None:
+        """(content_type, final_url, html) of a frame address; html only for HTML pages."""
+        if self.http.validate(url):
+            return None
+        try:
+            resp, _, _, final = self.http.request(url, deadline, [])
+        except Exception:
+            return None
+        try:
+            if resp.status_code >= 400:
+                return None
+            it = resp.iter_content(CHUNK)
+            head = next(it, b"") or b""
+            ctype = detect_content_type(header(resp.headers, "Content-Type"), final, head,
+                                        disposition_filename(header(resp.headers, "Content-Disposition")))
+            if ctype != "HTML":
+                return ctype, final, ""
+            data, _ = self.http.read(it, head, SMALL_BODY_CAP, deadline)
+            return ctype, final, data.decode("utf-8", "replace")
+        except Exception:
+            return None
+        finally:
+            resp.close()
 
     def _probe(self, url: str, deadline: float) -> tuple[str, str] | None:
         """(content_type, final_url) of a link, from a streamed GET that reads only the first chunk."""
@@ -297,21 +353,50 @@ class URLAnalyzer:
             if resp.status_code >= 400:
                 return None
             head = next(resp.iter_content(CHUNK), b"") or b""
-            return detect_content_type(header(resp.headers, "Content-Type"), final, head), final
+            return detect_content_type(header(resp.headers, "Content-Type"), final, head,
+                                       disposition_filename(header(resp.headers, "Content-Disposition"))), final
         finally:
             resp.close()
 
-    def _landing(self, r: URLAnalysisResult, html: str, final_url: str, deadline: float) -> None:
-        urls = self._extract_links(html, final_url, deadline)
-        if not urls and self.renderer is not None:
+    def _landing(self, r: URLAnalysisResult, html: str, final_url: str, deadline: float, supplied: bool = False) -> None:
+        urls, how = self._extract_links(html, final_url, deadline)
+        shield = "" if urls else detect_bot_protection(html)
+        if not urls and self.renderer is not None and not supplied:
             rendered = self.renderer.render(final_url)
             if rendered:
-                urls = self._extract_links(rendered, final_url, deadline)
+                urls, how = self._extract_links(rendered, final_url, deadline)
                 if urls:
+                    shield = ""
                     r.notes.append("Document links were found by rendering the page in a browser")
+                else:
+                    shield = detect_bot_protection(rendered)       # the rendered page tells the truth
+        if shield and not urls:
+            # A verification page has no links by design: "no documents" would be a false answer.
+            r.status, r.url_type, r.analysis_status = "BLOCKED", "UNKNOWN", "Unknown"
+            r.document_link_type, r.document_link_count, r.document_urls = "", None, []
+            if supplied:
+                r.error = (f"The pasted HTML is a {shield} verification page, not the real page. Copy the page source "
+                           "again after the real page has finished loading in your browser.")
+            else:
+                r.error = (f"Blocked by bot protection ({shield}): the server returned a verification page instead of the "
+                           "real page, so its document links could not be checked. "
+                           + ("The browser fallback was blocked too." if self.renderer is not None
+                              else "Open the page in a browser and paste its source here (Page Source), "
+                                   "or enable the browser fallback (browser.enabled in config.yaml)."))
+            log.warning("Bot protection (%s) on %s", shield, final_url)
+            return
         r.document_urls = urls[:MAX_LISTED_LINKS]
         r.document_link_count = len(urls)
         log.info("Document links found: %d on %s", len(urls), final_url)
+        via = set().union(*how.values()) if how else set()
+        if "iframe" in via and "link" in via:         # a viewer frame AND a download link/button: same document or not?
+            r.notes.append("The embedded viewer (iframe) and the download link/button point to the same document - reported as SINGLE"
+                           if len(urls) == 1 else
+                           f"The embedded viewer (iframe) and the download link/button do not point to the same document "
+                           f"({len(urls)} different documents) - reported as MULTIPLE")
+        elif "iframe" in via:
+            r.notes.append("The document is shown in an embedded frame (iframe)" if len(urls) == 1 else
+                           f"{len(urls)} different documents are shown in embedded frames (iframe)")
         if not urls:
             r.document_link_type = "NONE"
         elif len(urls) == 1:
@@ -347,6 +432,33 @@ class URLAnalyzer:
         if r.content_type in ("PDF", "DOCX"):
             r.page_count = "Unknown"
 
+    # ── page source supplied by the user ────────────────────────────────────
+    def analyze_html(self, url: str, html: str) -> URLAnalysisResult:
+        """Analyse a landing page from HTML the user copied out of their own browser (useful when the site shows
+        automated clients a verification page). The page is NOT requested; its document links are found and the
+        single linked document, if any, is fetched and analysed as usual. `url` resolves relative links."""
+        url = (url or "").strip()
+        r = URLAnalysisResult(url=url, domain=extract_domain(url) if url else "")
+        err = self.http.validate(url)
+        if err:
+            r.error, r.status, r.url_type = err, "ERROR", "NOT_WORKING"
+            return r
+        html = (html or "")[:MAX_SUPPLIED_HTML]
+        if not html.strip() or "<" not in html:
+            r.error, r.status, r.url_type = "No page source was supplied (paste the page's HTML)", "ERROR", "NOT_WORKING"
+            return r
+        r.status, r.url_type, r.content_type, r.final_url, r.analysis_status = "WORKING", "LANDING_PAGE", "HTML", url, "Success"
+        r.file_size_bytes = len(html.encode("utf-8", "replace"))
+        r.file_size = human_size(r.file_size_bytes)
+        r.notes.append("Analysed from page source supplied by the user - the page itself was not requested")
+        try:
+            self._landing(r, html, document_base_url(html, url), time.monotonic() + self.s.total_deadline, supplied=True)
+        except Exception as e:
+            log.exception("Analysing supplied page source failed for %s", url)
+            r.error, r.analysis_status = f"Unexpected error: {str(e)[:120]}", "Failed"
+        r.analyzed_at = _now()
+        return r
+
     # ── batches ─────────────────────────────────────────────────────────────
     def analyze_batch(self, records: list[BookRecord],
                       on_result: Callable[[int, URLAnalysisResult], None] | None = None,
@@ -354,12 +466,14 @@ class URLAnalyzer:
         """Analyse many records concurrently (each distinct URL once). Results keep the input order."""
         results: list[URLAnalysisResult | None] = [None] * len(records)
         groups: dict[str, list[int]] = {}
+        supplied: list[int] = []                     # records that come with the page's HTML: analysed individually
         for i, rec in enumerate(records):
-            groups.setdefault(url_key(rec.url), []).append(i)
-        if not groups:
+            (supplied.append(i) if rec.page_html else groups.setdefault(url_key(rec.url), []).append(i))
+        if not groups and not supplied:
             return []
-        with ThreadPoolExecutor(max_workers=max(1, min(self.s.max_workers, len(groups)))) as pool:
+        with ThreadPoolExecutor(max_workers=max(1, min(self.s.max_workers, len(groups) + len(supplied)))) as pool:
             futures = {pool.submit(self.analyze, records[idxs[0]].url, force): idxs for idxs in groups.values()}
+            futures.update({pool.submit(self.analyze_html, records[i].url, records[i].page_html): [i] for i in supplied})
             for fut in as_completed(futures):
                 try:
                     base = fut.result()

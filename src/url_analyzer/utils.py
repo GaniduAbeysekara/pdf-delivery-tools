@@ -56,8 +56,8 @@ def url_extension(url: str) -> str:
     if "/" in ext:
         return ""
     # Strip any extra chars after extension (e.g. %20)
-    ext = re.split(r"[^a-z0-9]", ext)[0]
-    return ext
+    ext = "." + re.split(r"[^a-z0-9]", ext[1:])[0]
+    return ext if len(ext) > 1 else ""
 
 
 def is_document_extension(url: str, extensions: list[str] | None = None) -> bool:

@@ -25,3 +25,6 @@ input/*
 *.xlsx
 *.xls
 *.csv
+
+# Local application data (editable tables, e.g. Base Templates) - private to the machine
+data/

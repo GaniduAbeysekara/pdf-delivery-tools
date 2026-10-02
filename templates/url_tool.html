@@ -65,6 +65,11 @@
   .toolbar { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.6rem; align-items:center; margin-bottom:.6rem; }
   .empty { text-align:center; padding:2rem 1rem; color:var(--text2); }
   .notes { color:var(--text2); font-size:.82rem; margin-top:.5rem; }
+  .howto { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:.7rem 1rem; font-size:.85rem; color:var(--text2); margin:.2rem 0 .8rem; }
+  .howto ol { margin:.3rem 0 .3rem 1.2rem; padding:0; } .howto li { margin:.2rem 0; } .howto code { background:var(--bg); padding:.1rem .4rem; border-radius:4px; font-family:Consolas,monospace; color:var(--text); }
+  dialog { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:1.2rem 1.4rem; width:min(760px,92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.6); } dialog h3 { margin-bottom:.4rem; } dialog .row { display:flex; gap:.6rem; margin-top:.8rem; justify-content:flex-end; flex-wrap:wrap; }
+  .ps-btn { padding:.15rem .6rem !important; font-size:.72rem !important; margin-right:.4rem; }
   .xl-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.8rem; margin:.8rem 0; }
   .preview td { max-width:260px; }
 </style>
@@ -82,6 +87,7 @@
       <button class="tab on" data-t="urls">Paste URLs</button>
       <button class="tab" data-t="excel">Excel Batch Upload</button>
       <button class="tab" data-t="backlog">From Daily Backlog</button>
+      <button class="tab" data-t="source">Page Source</button>
     </div>
 
     <div id="p-urls">
@@ -99,10 +105,33 @@
           <div><label class="fl" for="xl-url">URL column <span id="xl-auto" style="color:var(--green)"></span></label><select class="fin" id="xl-url"></select></div>
           <div><label class="fl" for="xl-id">Document ID column (optional)</label><select class="fin" id="xl-id"></select></div>
           <div><label class="fl" for="xl-title">Book Title column (optional)</label><select class="fin" id="xl-title"></select></div>
+          <div><label class="fl" for="xl-code">Code column (optional)</label><select class="fin" id="xl-code"></select></div>
+          <div><label class="fl" for="xl-tpl">SpideringTemplate column (optional)</label><select class="fin" id="xl-tpl"></select></div>
         </div>
         <div class="tw preview" id="xl-preview" style="max-height:200px;margin-bottom:.8rem"></div>
         <button class="btn" id="go-excel" disabled>Analyze Excel</button>
       </div>
+    </div>
+
+    <div id="p-source" style="display:none">
+      <div class="howto">
+        <b>For pages that show "verifying you are human" (or that the tool cannot read):</b>
+        <ol>
+          <li>Open the page in your normal browser and wait until the real page has loaded.</li>
+          <li>Press <kbd>Ctrl</kbd>+<kbd>U</kbd> (view source), then <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>.<br />
+              Pages that build their links with JavaScript: press <kbd>F12</kbd> &rarr; Console, type <code>copy(document.documentElement.outerHTML)</code> and press Enter (Chrome may ask you to type <code>allow pasting</code> first).</li>
+          <li>Paste it below (or load a saved .html file), enter the page address, and analyze. The page is not requested again - only the document it links to is.</li>
+        </ol>
+      </div>
+      <div class="xl-grid">
+        <div style="grid-column:1/-1"><label class="fl" for="src-url">Page address (URL) *</label><input class="fin" id="src-url" type="url" placeholder="https://www.example.org/reports/report-1/" /></div>
+        <div><label class="fl" for="src-id">Document ID (optional)</label><input class="fin" id="src-id" type="text" /></div>
+        <div><label class="fl" for="src-title">Book Title (optional)</label><input class="fin" id="src-title" type="text" /></div>
+      </div>
+      <label class="fl" for="src-html" style="margin-top:.6rem">Page source (HTML) *</label>
+      <textarea id="src-html" placeholder="Paste the page's HTML here..."></textarea>
+      <div style="margin:.5rem 0 .8rem"><input type="file" id="src-file" accept=".html,.htm,.txt,text/html" /> <span class="hint" id="src-info"></span></div>
+      <button class="btn" id="go-src">Analyze page source</button>
     </div>
 
     <div id="p-backlog" style="display:none">
@@ -124,6 +153,23 @@
     <div class="box" id="progress"><div class="bar"><div id="bar"></div></div>
       <div class="pinfo"><span id="ptext">Starting...</span><span id="ppct">0%</span></div></div>
     <div class="msg" id="cachemsg"></div>
+    <dialog id="ps-dlg">
+      <h3>Paste page source</h3>
+      <div class="hint" id="ps-url" style="word-break:break-all"></div>
+      <div class="howto">
+        <b>For pages that show "verifying you are human" (or that the tool cannot read):</b>
+        <ol>
+          <li>Open the page in your normal browser and wait until the real page has loaded.</li>
+          <li>Press <kbd>Ctrl</kbd>+<kbd>U</kbd> (view source), then <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>.<br />
+              Pages that build their links with JavaScript: press <kbd>F12</kbd> &rarr; Console, type <code>copy(document.documentElement.outerHTML)</code> and press Enter (Chrome may ask you to type <code>allow pasting</code> first).</li>
+          <li>Paste it below (or load a saved .html file), enter the page address, and analyze. The page is not requested again - only the document it links to is.</li>
+        </ol>
+      </div>
+      <textarea id="ps-html" placeholder="Paste the page's HTML here..."></textarea>
+      <div style="margin-top:.5rem"><input type="file" id="ps-file" accept=".html,.htm,.txt,text/html" /></div>
+      <div class="msg" id="ps-msg"></div>
+      <div class="row"><button class="btn ghost" id="ps-cancel">Cancel</button><button class="btn" id="ps-go">Analyze this page</button></div>
+    </dialog>
 
     <div class="cards" id="cards" style="margin-top:1rem"></div>
     <div class="pills" id="pills"></div>
@@ -147,6 +193,8 @@
       <div class="sec">Filters</div>
       <div class="fgrid" id="fgrid"></div>
       <div class="frow">
+        <div style="min-width:160px"><label class="fl" for="code-q">Code</label><input class="fin" id="code-q" type="search" placeholder="Search Code..." /></div>
+        <div style="min-width:190px"><label class="fl" for="tpl-q">SpideringTemplate</label><input class="fin" id="tpl-q" type="search" placeholder="Search template..." /></div>
         <div class="grow"><label class="fl" for="q">Search</label><input class="fin" id="q" type="search" placeholder="Search..." /></div>
         <button class="btn ghost" id="clear">Clear Filters</button>
       </div>
@@ -161,6 +209,7 @@
           <button class="btn ghost" id="copysel" disabled>Copy selected URLs</button>
           <button class="btn ghost" id="re-sel" disabled>Re-analyze Selected</button>
           <button class="btn ghost" id="re-all" disabled>Re-analyze All</button>
+          <button class="btn" id="to-bta" disabled title="Compare these URLs with the Base Templates (joined on domain)">Send to Base Template Analysis</button>
           <button class="btn green" id="dl-sel" disabled>Download Selected</button>
           <button class="btn green" id="dl" disabled>Download Analysis Results</button>
         </div>
@@ -179,15 +228,15 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const API = '/api/url-analysis';
 let tab = 'urls', transfer = null, upload = null, jobId = null, R = [], next = 0, poll = null, source = '', sourceName = '';
 const F = {domain: new Set(), http: new Set(), status: new Set(), urltype: new Set(), type: new Set(), linktype: new Set(),
-           astatus: new Set(), direct: new Set(), lang: new Set()};
-let quick = 'all', q = '', sortCol = 'idx', sortAsc = true, page = 1, selected = new Set(), dirty = false, lastState = 'running';
+           astatus: new Set(), direct: new Set(), lang: new Set(), mime: new Set()};
+let quick = 'all', q = '', qCode = '', qTpl = '', sortCol = 'idx', sortAsc = true, page = 1, selected = new Set(), dirty = false, lastState = 'running';
 const PAGE = 100;
 
 /* ---------- input tabs ---------- */
 function setTab(t) {
   tab = t;
   document.querySelectorAll('#tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.t === t));
-  ['urls', 'excel', 'backlog'].forEach(k => $('p-' + k).style.display = k === t ? 'block' : 'none');
+  ['urls', 'excel', 'backlog', 'source'].forEach(k => $('p-' + k).style.display = k === t ? 'block' : 'none');
 }
 document.querySelectorAll('#tabs .tab').forEach(b => b.onclick = () => {
   setTab(b.dataset.t);
@@ -198,7 +247,7 @@ function showMsg(kind, text) { const m = $('msg'); m.className = 'msg ' + kind; 
 /* ---------- input 3: books handed over from the Daily Backlog ---------- */
 (async function init() {
   const params = new URLSearchParams(location.search);
-  const want = params.get('tab'); if (['urls', 'excel', 'backlog'].includes(want)) setTab(want);
+  const want = params.get('tab'); if (['urls', 'excel', 'backlog', 'source'].includes(want)) setTab(want);
   const tid = params.get('transfer'); if (!tid) return;
   try {
     const r = await fetch('/api/transfer/' + encodeURIComponent(tid)); const d = await r.json();
@@ -211,8 +260,8 @@ function showMsg(kind, text) { const m = $('msg'); m.className = 'msg ' + kind; 
     if (d.skipped_blank) notes.push(`${d.skipped_blank} selected book(s) had no URL and were skipped.`);
     if (d.duplicates_removed) notes.push(`${d.duplicates_removed} duplicate URL(s) were removed.`);
     $('bl-notes').textContent = notes.join(' ');
-    $('bl-preview').innerHTML = '<table><thead><tr><th>Document ID</th><th>Book Title</th><th>URL</th><th>API Result</th><th>Book Type</th></tr></thead><tbody>'
-      + d.items.slice(0, 50).map(i => `<tr><td>${esc(i.document_id)}</td><td title="${esc(i.book_title)}">${esc(i.book_title)}</td><td title="${esc(i.url)}">${esc(i.url)}</td><td>${esc(i.api_result)}</td><td>${esc(i.book_type)}</td></tr>`).join('')
+    $('bl-preview').innerHTML = '<table><thead><tr><th>Document ID</th><th>Book Title</th><th>Code</th><th>SpideringTemplate</th><th>URL</th><th>API Result</th><th>Book Type</th></tr></thead><tbody>'
+      + d.items.slice(0, 50).map(i => `<tr><td>${esc(i.document_id)}</td><td title="${esc(i.book_title)}">${esc(i.book_title)}</td><td title="${esc(i.code)}">${esc(i.code)}</td><td title="${esc(i.spidering_template)}">${esc(i.spidering_template)}</td><td title="${esc(i.url)}">${esc(i.url)}</td><td>${esc(i.api_result)}</td><td>${esc(i.book_type)}</td></tr>`).join('')
       + '</tbody></table>' + (d.items.length > 50 ? `<div class="hint" style="padding:.4rem .7rem">Showing the first 50 of ${d.items.length}.</div>` : '');
   } catch (e) { showMsg('err', e.message || 'Could not load the selected books.'); }
 })();
@@ -227,7 +276,7 @@ $('xl-file').onchange = async () => {
     if (!r.ok) throw new Error(d.error || 'Could not read the file.');
     upload = d; $('msg').className = 'msg';
     const opts = (sel, blank, chosen) => $(sel).innerHTML = `<option value="">${blank}</option>` + d.columns.map(c => `<option value="${esc(c)}" ${c === chosen ? 'selected' : ''}>${esc(c)}</option>`).join('');
-    opts('xl-url', 'Select URL Column', d.url_column && d.confident ? d.url_column : ''); opts('xl-id', '(none)', d.id_column); opts('xl-title', '(none)', d.title_column);
+    opts('xl-url', 'Select URL Column', d.url_column && d.confident ? d.url_column : ''); opts('xl-id', '(none)', d.id_column); opts('xl-title', '(none)', d.title_column); opts('xl-code', '(none)', d.code_column); opts('xl-tpl', '(none)', d.template_column);
     $('xl-auto').textContent = d.url_column && d.confident ? '(detected automatically)' : '';
     $('xl-info').textContent = `${d.file_name} - sheet "${d.sheet}" - ${d.rows.toLocaleString()} rows, ${d.columns.length} columns` + (d.confident ? '' : '. The URL column could not be identified with confidence - please choose it.');
     $('xl-preview').innerHTML = '<table><thead><tr>' + d.columns.map(c => `<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>'
@@ -245,7 +294,7 @@ async function start(path, body, label) {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Could not start the analysis.');
     jobId = d.job_id; R = new Array(d.total).fill(null); next = 0; selected.clear(); page = 1; quick = 'all';
-    Object.values(F).forEach(s => s.clear()); q = ''; $('q').value = ''; source = d.source; sourceName = '';
+    Object.values(F).forEach(s => s.clear()); q = qCode = qTpl = ''; $('q').value = $('code-q').value = $('tpl-q').value = ''; source = d.source; sourceName = '';
     const bits = [`Analyzing ${d.total} URL${d.total === 1 ? '' : 's'}`];
     if (d.duplicates_removed) bits.push(`${d.duplicates_removed} duplicate URL(s) removed`);
     if (d.invalid) bits.push(`${d.invalid} line(s) are not valid URLs and will be reported as failed`);
@@ -257,7 +306,43 @@ async function start(path, body, label) {
 }
 $('go-urls').onclick = () => start('/analyze', {mode: 'auto', text: $('t-urls').value});
 $('go-backlog').onclick = () => start('/analyze', {mode: 'items', items: transfer.items});
-$('go-excel').onclick = () => { if (upload) { sourceName = upload.file_name; start('/excel/analyze', {upload_id: upload.upload_id, url_column: $('xl-url').value, id_column: $('xl-id').value, title_column: $('xl-title').value}); } };
+
+/* ---------- input 4: page source copied from the user's own browser ---------- */
+function loadFile(input, target, info) {
+  input.onchange = () => {
+    const f = input.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { target.value = rd.result; if (info) info.textContent = `${f.name} loaded (${Math.round(f.size / 1024).toLocaleString()} KB)`; };
+    rd.readAsText(f);
+  };
+}
+loadFile($('src-file'), $('src-html'), $('src-info'));
+$('go-src').onclick = () => {
+  if (!$('src-url').value.trim()) { showMsg('err', 'Enter the address of the page the HTML came from.'); return; }
+  if (!$('src-html').value.includes('<')) { showMsg('err', "Paste the page's HTML source first."); return; }
+  sourceName = '';
+  start('/analyze', {mode: 'page_source', url: $('src-url').value.trim(), html: $('src-html').value,
+                     document_id: $('src-id').value.trim(), book_title: $('src-title').value.trim()});
+};
+
+/* ---------- BLOCKED row: paste the page source for just that row ---------- */
+let psIndex = null;
+const dlg = $('ps-dlg');
+function openPageSource(i) {
+  psIndex = i; $('ps-url').textContent = R[i].url; $('ps-html').value = ''; $('ps-msg').className = 'msg'; dlg.showModal();
+}
+loadFile($('ps-file'), $('ps-html'), null);
+$('ps-cancel').onclick = () => dlg.close();
+$('ps-go').onclick = async () => {
+  const html = $('ps-html').value;
+  if (!html.includes('<')) { const m = $('ps-msg'); m.className = 'msg err'; m.textContent = "Paste the page's HTML source first."; return; }
+  try {
+    const r = await fetch(`${API}/${jobId}/page-source`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({index: psIndex, html})});
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not analyze the page source.');
+    dlg.close(); showMsg('info', 'Analyzing the pasted page source...'); $('progress').style.display = 'block'; startPolling();
+  } catch (e) { const m = $('ps-msg'); m.className = 'msg err'; m.textContent = e.message; }
+};
+$('go-excel').onclick = () => { if (upload) { sourceName = upload.file_name; start('/excel/analyze', {upload_id: upload.upload_id, url_column: $('xl-url').value, id_column: $('xl-id').value, title_column: $('xl-title').value, code_column: $('xl-code').value, template_column: $('xl-tpl').value}); } };
 
 function startPolling() {
   clearInterval(poll); lastState = 'running';
@@ -292,11 +377,13 @@ const QUICK = {
 function matchesFilters(r, withQuick = true, skip = '') {
   const ql = q.toLowerCase();
   return (skip === 'domain' || !F.domain.size || F.domain.has(r.domain)) && (!F.http.size || F.http.has(statusOf(r))) &&
-    (!F.status.size || F.status.has(r.status)) && (!F.urltype.size || F.urltype.has(r.url_type)) && (!F.type.size || F.type.has(typeOf(r))) &&
+    (!F.status.size || F.status.has(r.status)) && (!F.urltype.size || F.urltype.has(r.url_type)) && (!F.type.size || F.type.has(typeOf(r))) && (!F.mime.size || F.mime.has(r.mime_type || 'none')) &&
     (!F.linktype.size || F.linktype.has(linkOf(r))) && (!F.astatus.size || F.astatus.has(r.analysis_status)) &&
     (!F.direct.size || F.direct.has(r.direct_document)) && (!F.lang.size || F.lang.has(r.language || 'Unknown')) &&
     (!withQuick || QUICK[quick](r)) &&
-    (!ql || [r.document_id, r.book_title, r.url, r.domain, r.final_url, r.document_url, r.content_type, r.url_type, r.mime_type, r.error].some(v => String(v || '').toLowerCase().includes(ql)));
+    (!qCode || String(r.code || '').toLowerCase().includes(qCode.toLowerCase())) &&
+    (!qTpl || String(r.spidering_template || '').toLowerCase().includes(qTpl.toLowerCase())) &&
+    (!ql || [r.document_id, r.book_title, r.code, r.spidering_template, r.url, r.domain, r.final_url, r.document_url, r.content_type, r.url_type, r.mime_type, r.error].some(v => String(v || '').toLowerCase().includes(ql)));
 }
 function filtered() {
   const key = r => { const v = r[sortCol]; return sortCol === 'page_count' ? (/^\d+$/.test(v) ? +v : -1) : sortCol === 'file_size' ? (r.file_size_bytes ?? -1) : sortCol === 'idx' ? r.idx : String(v ?? '').toLowerCase(); };
@@ -324,14 +411,15 @@ const uniq = f => [...new Set(done().map(f))].sort((a, b) => String(a).localeCom
   [['Domain', 'domain', () => uniq(r => r.domain)], ['HTTP Status', 'http', () => uniq(statusOf)],
    ['Status', 'status', () => ['WORKING', 'NOT_WORKING', 'BLOCKED', 'TIMEOUT', 'ERROR']],
    ['URL Type', 'urltype', () => ['DIRECT_PDF', 'DIRECT_DOCUMENT', 'LANDING_PAGE', 'NOT_WORKING', 'UNKNOWN']],
-   ['Content Type', 'type', () => uniq(typeOf)], ['Document Link Type', 'linktype', () => ['DIRECT', 'SINGLE', 'MULTIPLE', 'NONE', 'n/a']],
+   ['Content Type', 'type', () => uniq(typeOf)], ['Header Content-Type', 'mime', () => uniq(r => r.mime_type || 'none')], ['Document Link Type', 'linktype', () => ['DIRECT', 'SINGLE', 'MULTIPLE', 'NONE', 'n/a']],
    ['Analysis Status', 'astatus', () => ['Success', 'Failed', 'Unknown']], ['Direct Document', 'direct', () => ['Yes', 'No']],
    ['Language', 'lang', () => uniq(r => r.language || 'Unknown')]]
     .forEach(([l, k, o]) => { const d = document.createElement('div'); g.appendChild(d); multi(d, l, k, o); });
 })();
 const syncFilterButtons = () => document.querySelectorAll('#fgrid .ms').forEach(m => m._paintBtn());
-$('q').oninput = () => { q = $('q').value.trim(); page = 1; dirty = true; render(true); };
-$('clear').onclick = () => { Object.values(F).forEach(s => s.clear()); quick = 'all'; q = ''; $('q').value = ''; page = 1; syncFilterButtons(); dirty = true; render(true); };
+$('q').oninput = $('code-q').oninput = $('tpl-q').oninput = () => {
+  q = $('q').value.trim(); qCode = $('code-q').value.trim(); qTpl = $('tpl-q').value.trim(); page = 1; dirty = true; render(true); };
+$('clear').onclick = () => { Object.values(F).forEach(s => s.clear()); quick = 'all'; q = qCode = qTpl = ''; $('q').value = $('code-q').value = $('tpl-q').value = ''; page = 1; syncFilterButtons(); dirty = true; render(true); };
 
 /* ---------- render ---------- */
 let lastRender = 0;
@@ -391,10 +479,10 @@ function render(force) {
   domainTable(all);
 
   $('countline').innerHTML = `Showing <b>${rows.length.toLocaleString()}</b> of <b>${R.length.toLocaleString()}</b> URLs`;
-  const cols = [['Document ID', 'document_id'], ['Book Title', 'book_title'], ['URL', 'url'], ['Domain', 'domain'], ['HTTP Status', 'http_status'], ['Status', 'status'],
-    ['URL Type', 'url_type'], ['Final URL', 'final_url'], ['Content Type', 'content_type'], ['Direct Document', 'direct_document'], ['Document URL', 'document_url'],
+  const cols = [['Document ID', 'document_id'], ['Book Title', 'book_title'], ['Code', 'code'], ['SpideringTemplate', 'spidering_template'], ['URL', 'url'], ['Domain', 'domain'], ['HTTP Status', 'http_status'], ['Status', 'status'],
+    ['URL Type', 'url_type'], ['Final URL', 'final_url'], ['Content Type', 'content_type'], ['Header Content-Type', 'mime_type'], ['Direct Document', 'direct_document'], ['Document URL', 'document_url'],
     ['Link Type', 'document_link_type'], ['Page Count', 'page_count'], ['File Size', 'file_size'], ['Language', 'language'], ['Last Modified', 'last_modified'],
-    ['Analysis Status', 'analysis_status'], ['Error', 'error']];
+    ['Analysis Status', 'analysis_status'], ['Error', 'error']].filter(([l, k]) => !['code', 'spidering_template'].includes(k) || all.some(r => r[k]));
   const nPages = Math.max(1, Math.ceil(rows.length / PAGE)); page = Math.min(page, nPages);
   const slice = rows.slice((page - 1) * PAGE, page * PAGE);
   const arrow = k => sortCol === k ? (sortAsc ? ' &#9650;' : ' &#9660;') : '';
@@ -410,9 +498,11 @@ function render(force) {
         else if (k === 'analysis_status') cell = `<span class="badge ${v === 'Success' ? 'g' : v === 'Failed' ? 'r' : 'y'}">${esc(v)}</span>` + (r.cached ? ` <span class="badge n" title="Reused from a check made at ${esc(r.analyzed_at)} UTC">cached</span>` : '');
         else if (k === 'document_link_type') { cell = v ? `<span class="badge ${v === 'MULTIPLE' ? 'y' : v === 'NONE' ? 'n' : 'g'}">${esc(v)}${v === 'SINGLE' || v === 'MULTIPLE' || v === 'NONE' ? ' (' + esc(r.document_link_count) + ')' : ''}</span>` : ''; title = (r.document_urls || []).join('\n'); }
         else if (k === 'url' || k === 'final_url' || k === 'document_url') cell = link(v);
+        else if (k === 'error' && r.status === 'BLOCKED' && v) cell = `<button class="btn ghost ps-btn" data-i="${r.idx}">Paste page source</button>${esc(v)}`;
         return `<td title="${esc(title)}">${cell}</td>`; }).join('') + '</tr>').join('') + '</tbody></table>';
   $('tbl').querySelectorAll('th[data-k]').forEach(th => th.onclick = () => { const k = th.dataset.k; if (sortCol === k) sortAsc = !sortAsc; else { sortCol = k; sortAsc = true; } dirty = true; render(true); });
   const sa = $('selall'); if (sa) sa.onchange = () => { slice.forEach(r => sa.checked ? selected.add(r.idx) : selected.delete(r.idx)); render(true); };
+  $('tbl').querySelectorAll('.ps-btn').forEach(b => b.onclick = () => openPageSource(+b.dataset.i));
   $('tbl').querySelectorAll('.rs').forEach(cb => cb.onchange = () => { cb.checked ? selected.add(+cb.dataset.i) : selected.delete(+cb.dataset.i); updateSel(); });
   $('pager').innerHTML = rows.length > PAGE ? `<button class="btn ghost" id="pp" ${page <= 1 ? 'disabled' : ''}>Prev</button><span>Page ${page} of ${nPages}</span><button class="btn ghost" id="pn" ${page >= nPages ? 'disabled' : ''}>Next</button>` : '';
   if ($('pp')) { $('pp').onclick = () => { page--; render(true); }; $('pn').onclick = () => { page++; render(true); }; }
@@ -423,6 +513,8 @@ function updateSel() {
   $('copysel').disabled = !selected.size;
   $('re-sel').disabled = !selected.size || lastState === 'running';
   $('dl-sel').disabled = !selected.size;
+  $('to-bta').disabled = !R.some(Boolean);
+  $('to-bta').textContent = selected.size ? `Send Selected (${selected.size}) to Base Template Analysis` : 'Send All to Base Template Analysis';
   $('dl-sel').textContent = selected.size ? `Download Selected (${selected.size})` : 'Download Selected';
   $('sel-clear').disabled = !selected.size;
   $('sel-filtered').disabled = !done().length;
@@ -436,6 +528,13 @@ $('dl-sel').onclick = async () => {
     if (!r.ok) throw new Error((await r.json()).error || 'Download failed');
     const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'URL_Analysis_Selected.xlsx';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch (e) { showMsg('err', e.message); }
+};
+$('to-bta').onclick = async () => {
+  try {
+    const r = await fetch(`${API}/${jobId}/send-to-base-templates`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({indices: selected.size ? [...selected] : null})});
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not send the URLs');
+    location.href = '/base-template-analysis?transfer=' + encodeURIComponent(d.transfer_id);
   } catch (e) { showMsg('err', e.message); }
 };
 $('copysel').onclick = async () => {

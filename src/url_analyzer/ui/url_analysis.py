@@ -9,8 +9,9 @@ from flask import Blueprint, jsonify, redirect, render_template, request, send_f
 from werkzeug.utils import secure_filename
 
 from .. import transfer
-from ..analysis import (SOURCE_BACKLOG, SOURCE_EXCEL, SOURCE_MANUAL, BookRecord, InputError, inspect_excel,
+from ..analysis import (SOURCE_BACKLOG, SOURCE_EXCEL, SOURCE_MANUAL, SOURCE_PAGE, BookRecord, InputError, inspect_excel,
                         parse_pasted, read_excel_records)
+from ..analysis.engine import MAX_SUPPLIED_HTML
 from ..analysis.inputs import MAX_ITEMS, ParseOutcome, dedupe
 from ..logger import log
 from ..services.url_analysis_service import UrlAnalysisService
@@ -57,6 +58,18 @@ def create_url_analysis_blueprint(output_dir: str | Path, upload_dir: str | Path
                 return jsonify({"error": "Invalid request."}), 400
             outcome = dedupe([BookRecord.from_dict(d) for d in raw[:MAX_ITEMS] if isinstance(d, dict)], ParseOutcome())
             source, source_name = SOURCE_BACKLOG, ""
+        elif mode == "page_source":                   # HTML copied from the user's own browser
+            url, html = str(body.get("url") or "").strip(), str(body.get("html") or "")
+            if not url:
+                return jsonify({"error": "Enter the address of the page the HTML came from."}), 400
+            if "<" not in html or len(html.strip()) < 20:
+                return jsonify({"error": "Paste the page's HTML source (see the steps above the box)."}), 400
+            if len(html) > MAX_SUPPLIED_HTML:
+                return jsonify({"error": "The page source is too large (limit 5 MB)."}), 413
+            rec = BookRecord.from_dict({**body, "url": url})
+            rec.page_html = html
+            outcome = ParseOutcome(items=[rec])
+            source, source_name = SOURCE_PAGE, ""
         elif mode in ("auto", "urls", "book"):
             text = str(body.get("text") or "")
             if len(text) > MAX_TEXT:
@@ -96,7 +109,8 @@ def create_url_analysis_blueprint(output_dir: str | Path, upload_dir: str | Path
         return jsonify({"upload_id": uid, "file_name": name, "sheet": ins.sheet, "columns": ins.columns,
                         "rows": ins.row_count, "url_column": ins.url_column, "confident": ins.confident,
                         "candidates": ins.candidates, "id_column": ins.id_column,
-                        "title_column": ins.title_column, "preview": ins.preview})
+                        "title_column": ins.title_column, "preview": ins.preview,
+                        "code_column": ins.code_column, "template_column": ins.template_column})
 
     @bp.route("/api/url-analysis/excel/analyze", methods=["POST"])
     def excel_analyze():
@@ -108,7 +122,8 @@ def create_url_analysis_blueprint(output_dir: str | Path, upload_dir: str | Path
             return jsonify({"error": "Select the URL column first."}), 400
         try:
             data = read_excel_records(up["path"], body.get("url_column"), body.get("id_column") or None,
-                                      body.get("title_column") or None)
+                                      body.get("title_column") or None, body.get("code_column") or None,
+                                      body.get("template_column") or None)
         except InputError as e:
             return jsonify({"error": str(e)}), 400
         finally:
@@ -129,6 +144,18 @@ def create_url_analysis_blueprint(output_dir: str | Path, upload_dir: str | Path
         st = svc.status(job_id, start)
         return (jsonify(st), 200) if st else (jsonify({"error": "Unknown analysis."}), 404)
 
+    @bp.route("/api/url-analysis/<job_id>/page-source", methods=["POST"])
+    def page_source(job_id: str):
+        """Replace one row's analysis with HTML the user copied from their browser (e.g. for BLOCKED pages)."""
+        if not svc.get(job_id):
+            return jsonify({"error": "Unknown analysis."}), 404
+        body = request.get_json(silent=True) or {}
+        html = str(body.get("html") or "")
+        if len(html) > MAX_SUPPLIED_HTML:
+            return jsonify({"error": "The page source is too large (limit 5 MB)."}), 413
+        err = svc.apply_page_source(job_id, body.get("index"), html)
+        return (jsonify({"error": err}), 409 if "Wait" in err else 400) if err else jsonify({"started": True})
+
     @bp.route("/api/url-analysis/<job_id>/reanalyze", methods=["POST"])
     def reanalyze(job_id: str):
         body = request.get_json(silent=True) or {}
@@ -141,6 +168,24 @@ def create_url_analysis_blueprint(output_dir: str | Path, upload_dir: str | Path
         if not ok:
             return jsonify({"error": "Nothing to re-analyze (is an analysis still running?)."}), 409
         return jsonify({"started": True})
+
+    @bp.route("/api/url-analysis/<job_id>/send-to-base-templates", methods=["POST"])
+    def send_to_base_templates(job_id: str):
+        """Hand the (selected) results to Base Template Analysis. The data is read from the job, never from the browser."""
+        job = svc.get(job_id)
+        if not job:
+            return jsonify({"error": "Unknown analysis."}), 404
+        indices = (request.get_json(silent=True) or {}).get("indices")
+        if indices is not None and (not isinstance(indices, list) or not all(isinstance(i, int) for i in indices)):
+            return jsonify({"error": "indices must be a list of numbers."}), 400
+        if indices is not None and not indices:
+            return jsonify({"error": "Select at least one URL first."}), 400
+        rows = svc.dataset_rows(job_id, indices)
+        if not rows:
+            return jsonify({"error": "There are no finished results to send yet."}), 409
+        tid = transfer.put({"records": rows, "source": {"tool": "url_analysis", "job_id": job_id, "name": job["source_name"] or "URL Analysis results"}})
+        log.info("Sent %d URL analysis rows to Base Template Analysis", len(rows))
+        return jsonify({"transfer_id": tid, "count": len(rows)})
 
     @bp.route("/api/url-analysis/<job_id>/download", methods=["GET", "POST"])
     def download(job_id: str):

@@ -10,10 +10,14 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from flask import Flask, render_template  # noqa: E402
 
 from url_analyzer.backlog.web import create_blueprint  # noqa: E402
+from url_analyzer.base_templates.analysis_web import create_analysis_blueprint  # noqa: E402
+from url_analyzer.base_templates.store import BaseTemplateStore  # noqa: E402
+from url_analyzer.base_templates.web import create_base_templates_blueprint  # noqa: E402
 from url_analyzer.ui.url_analysis import create_url_analysis_blueprint  # noqa: E402
 
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("output")
+DATA_DIR = Path("data")
 
 
 def create_app() -> Flask:
@@ -25,6 +29,10 @@ def create_app() -> Flask:
         d.mkdir(exist_ok=True)
     app.register_blueprint(create_blueprint(UPLOAD_DIR / "backlog", OUTPUT_DIR / "backlog"))
     app.register_blueprint(create_url_analysis_blueprint(OUTPUT_DIR / "url_analysis", UPLOAD_DIR / "url_analysis"))
+
+    templates_store = BaseTemplateStore(DATA_DIR / "base_templates.json")      # shared by both Base Template pages
+    app.register_blueprint(create_base_templates_blueprint(DATA_DIR / "base_templates.json", templates_store))
+    app.register_blueprint(create_analysis_blueprint(UPLOAD_DIR / "base_template_analysis", templates_store))
 
     @app.route("/")
     def home():

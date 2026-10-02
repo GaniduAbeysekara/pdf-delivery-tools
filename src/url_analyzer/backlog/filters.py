@@ -16,6 +16,8 @@ class FilterSpec:
     book_types: list[str] = field(default_factory=list)
     extra: dict[str, list[str]] = field(default_factory=dict)  # label -> values
     q: str = ""
+    code: str = ""        # contains-search on the UI Code
+    template: str = ""    # contains-search on the UI SpideringTemplate
     date_from: str = ""
     date_to: str = ""
 
@@ -40,6 +42,9 @@ def apply_filters(df: pd.DataFrame, spec: FilterSpec, filter_cols: dict[str, str
         col = (filter_cols or {}).get(label)
         if values and col in df.columns:
             mask &= df[col].isin(values)
+    for text, col in ((spec.code, C.CODE_COL), (spec.template, C.TEMPLATE_COL)):
+        if text.strip():
+            mask &= df[col].str.contains(text.strip(), case=False, regex=False, na=False)
     for token in spec.q.lower().split():
         mask &= df["_search"].str.contains(token, regex=False)
     if "_date" in df.columns:

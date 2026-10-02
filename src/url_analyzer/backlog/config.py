@@ -5,6 +5,9 @@ from __future__ import annotations
 UI_BOOK_TYPE_COLS = ["BookCategory"]
 UI_KEY_COLS = ["Code", "CubeBookId", "DocumentId"]
 UI_URL_COLS = ["Url"]
+# Extra Reg Transform columns carried onto each Power BI record (same DocumentId <-> BookSourceId match as Book Type)
+UI_CODE_COLS = ["Code"]
+UI_TEMPLATE_COLS = ["SpideringTemplate", "Spidering Template"]
 
 PBI_API_COLS = ["API Result"]
 PBI_KEY_COLS = ["BookSourceId", "SourceFileName"]
@@ -21,6 +24,8 @@ PBI_TITLE_COLS = ["BookTitle", "Book Title", "Title"]
 # ── Derived columns added to the Export tab ─────────────────────────────────
 BOOK_TYPE_COL = "Book Type"
 DOMAIN_COL = "Domain"
+CODE_COL = "Code"
+TEMPLATE_COL = "SpideringTemplate"
 
 # ── Book types ───────────────────────────────────────────────────────────────
 BT_PDF, BT_HTML, BT_HTML_PDF, BT_OTHER = "PDF", "HTML", "HTML + PDF", "Other"
@@ -82,7 +87,7 @@ MAX_FILTER_OPTIONS = 2000
 
 # ── Dashboard table ──────────────────────────────────────────────────────────
 DEFAULT_TABLE_COLS = [
-    "BookSourceId", "BookTitle", DOMAIN_COL, "API Result", BOOK_TYPE_COL,
+    "BookSourceId", "BookTitle", CODE_COL, TEMPLATE_COL, DOMAIN_COL, "API Result", BOOK_TYPE_COL,
     "Link to the Issuance", "URL Status", "Language", "Assigned To",
     "CUBE Jurisdiction", "CUBE Issuing Body", "APIResult_ChangeDate",
 ]

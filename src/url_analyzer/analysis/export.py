@@ -19,16 +19,17 @@ HEADER_FILL = PatternFill("solid", fgColor="4A6FA5")
 STANDARD_COLUMNS = [
     ("document_id", "Document ID"), ("book_title", "Book Title"), ("url", "URL"), ("domain", "Domain"),
     ("api_result", "API Result"), ("book_type", "Book Type"),        # shown only when the source provides them
-    ("http_status", "HTTP Status"), ("final_url", "Final URL"), ("content_type", "Content Type"),
+    ("code", "Code"), ("spidering_template", "SpideringTemplate"),
+    ("http_status", "HTTP Status"), ("final_url", "Final URL"), ("content_type", "Content Type"), ("mime_type", "Header Content-Type"),
     ("direct_document", "Direct Document"), ("page_count", "Page Count"), ("file_size", "File Size"),
     ("language", "Language"), ("last_modified", "Last Modified"), ("analysis_status", "Analysis Status"),
     ("error", "Error"),
 ]
-OPTIONAL_STANDARD = {"api_result", "book_type"}
+OPTIONAL_STANDARD = {"api_result", "book_type", "code", "spidering_template"}
 DETAIL_COLUMNS = [
     ("status", "Status"), ("url_type", "URL Type"), ("document_url", "Document URL"),
     ("document_link_type", "Document Link Type"), ("document_link_count", "Document Link Count"),
-    ("redirects", "Redirects"), ("final_status", "Final Status"), ("mime_type", "MIME Type"),
+    ("redirects", "Redirects"), ("final_status", "Final Status"),
     ("file_size_bytes", "File Size (bytes)"), ("text_extraction_status", "Text Extraction Status"),
     ("cached", "Cached"), ("analyzed_at", "Analyzed At"), ("notes", "Notes"),
 ]

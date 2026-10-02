@@ -64,7 +64,7 @@ def test_send_selected_books_dedupes_and_drops_blank_urls(client, rid):
     assert payload["source"]["tool"] == "backlog" and payload["source"]["rid"] == rid
     first, second = payload["items"]
     assert first == {"document_id": "D1", "book_title": "One", "url": "https://a.gov/1.pdf", "domain": "a.gov",
-                     "api_result": "Change", "book_type": "PDF"}
+                     "api_result": "Change", "book_type": "PDF", "code": "", "spidering_template": ""}
     assert second["document_id"] == "D4" and second["book_type"] == "HTML"     # Book Type travels with the book
 
 

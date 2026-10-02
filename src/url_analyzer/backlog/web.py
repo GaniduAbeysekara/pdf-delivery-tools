@@ -45,6 +45,7 @@ def _spec(args) -> F.FilterSpec:
     return F.FilterSpec(
         domains=args.getlist("domain"), apis=args.getlist("api"),
         book_types=args.getlist("book_type"), extra=extra, q=(args.get("q") or "").strip(),
+        code=(args.get("code") or "").strip(), template=(args.get("template") or "").strip(),
         date_from=args.get("date_from", ""), date_to=args.get("date_to", ""),
     )
 
@@ -212,6 +213,7 @@ def create_blueprint(upload_dir: str | Path, output_dir: str | Path) -> Blueprin
                 "document_id": "" if not data.id_col or is_blank(r[data.id_col]) else str(r[data.id_col]).strip(),
                 "book_title": "" if not data.title_col or is_blank(r[data.title_col]) else str(r[data.title_col]).strip(),
                 "url": url, "domain": r[C.DOMAIN_COL], "api_result": r["_api_label"], "book_type": r[C.BOOK_TYPE_COL],
+                "code": r[C.CODE_COL], "spidering_template": r[C.TEMPLATE_COL],
             })
         if not items:
             return jsonify({"error": "None of the selected books has a source URL.", "skipped_blank": blank}), 400

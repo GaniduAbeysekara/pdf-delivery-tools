@@ -24,6 +24,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--url-column", default="", help="Name of the URL column (auto-detect if omitted)")
     parser.add_argument("--id-column", default="", help="Name of the Document ID column (optional)")
     parser.add_argument("--title-column", default="", help="Name of the Book Title column (optional)")
+    parser.add_argument("--code-column", default="", help="Name of the Code column (optional)")
+    parser.add_argument("--template-column", default="", help="Name of the SpideringTemplate column (optional)")
     parser.add_argument("--workers", type=int, default=0, help="Parallel workers (0 = use config)")
     parser.add_argument("--config", default="", help="Path to config.yaml")
     parser.add_argument("--log-dir", default="logs", help="Directory for log files")
@@ -48,6 +50,8 @@ def process(
     id_column: str = "",
     title_column: str = "",
     force_refresh: bool = False,
+    code_column: str = "",
+    template_column: str = "",
 ) -> list[URLAnalysisResult]:
     """Excel in -> shared engine -> shared exporter. Returns the standard results."""
     setup_logger(log_dir)
@@ -56,7 +60,8 @@ def process(
     analyzer = URLAnalyzer(AnalyzerSettings.from_config(cfg, **overrides))
 
     log.info("Loading input: %s", input_path)
-    data = read_excel_records(input_path, url_column or None, id_column or None, title_column or None)
+    data = read_excel_records(input_path, url_column or None, id_column or None, title_column or None,
+                              code_column or None, template_column or None)
     for note in data.notes:
         log.info(note)
     total = len(data.records)
@@ -101,6 +106,7 @@ def main(argv: list[str] | None = None) -> None:
             input_path=args.input, output_path=output, url_column=args.url_column, workers=args.workers,
             config_path=args.config, log_dir=args.log_dir, id_column=args.id_column,
             title_column=args.title_column, force_refresh=args.fresh,
+            code_column=args.code_column, template_column=args.template_column,
         )
     except InputError as e:
         print(f"\nError: {e}", file=sys.stderr)

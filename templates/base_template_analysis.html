@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Base Template Analysis - PDF Delivery Tools{% endblock %}
+{% block head %}
+<style>
+  h1 { font-size:1.5rem; letter-spacing:-.3px; } .sub { color:var(--text2); margin:.25rem 0 1.1rem; max-width:920px; line-height:1.5; }
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; margin-bottom:1rem; }
+  .panel h2 { font-size:1rem; margin-bottom:.6rem; }
+  .cards { display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:.8rem; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.6rem .95rem; min-width:140px; text-align:left; color:var(--text); font:inherit; }
+  button.card { cursor:pointer; } button.card:hover, button.card.on { border-color:var(--accent); }
+  .card .n { font-size:1.45rem; font-weight:700; } .card .l { color:var(--text2); font-size:.76rem; margin-top:.1rem; }
+  .card.bad .n { color:var(--red); } .card.warn .n { color:var(--yellow); } .card.good .n { color:var(--green); }
+  input, select { background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:.5rem .65rem; font:inherit; }
+  input:focus, select:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  button, .btn { background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:.5rem .9rem; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+  button:hover, .btn:hover { border-color:var(--accent); } button.primary { background:var(--accent); border-color:var(--accent); color:#fff; } button:disabled { opacity:.5; cursor:default; }
+  .map { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.8rem; margin:.8rem 0; }
+  .map label { font-size:.78rem; color:var(--text2); display:block; margin-bottom:.2rem; } .map select { width:100%; }
+  .bar { display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; margin:.6rem 0; } #q { flex:1; min-width:220px; }
+  .tabs { display:flex; gap:.3rem; margin:.4rem 0 .6rem; border-bottom:1px solid var(--border); }
+  .tab { border:0; border-bottom:3px solid transparent; border-radius:0; background:none; padding:.55rem 1rem; color:var(--text2); }
+  .tab.on { color:var(--text); border-bottom-color:var(--accent); }
+  .tablewrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:auto; max-height:62vh; }
+  table { border-collapse:collapse; width:100%; min-width:960px; } th, td { text-align:left; padding:.45rem .7rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { position:sticky; top:0; background:var(--surface2); font-size:.74rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); white-space:nowrap; }
+  td.mono { font-family:Consolas,monospace; font-size:.82rem; word-break:break-all; } td.url { max-width:320px; word-break:break-all; font-size:.82rem; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:var(--surface2); }
+  .badge { display:inline-block; padding:.08rem .5rem; border-radius:99px; font-size:.72rem; font-weight:600; margin:0 .25rem .25rem 0; border:1px solid var(--border); white-space:nowrap; }
+  .badge.error, .badge.Needs, .badge.fix { color:var(--red); border-color:var(--red); } .badge.info, .badge.Check { color:var(--yellow); border-color:var(--yellow); } .badge.OK { color:var(--green); border-color:var(--green); }
+  .pager { display:flex; gap:.6rem; align-items:center; margin:.7rem 0; color:var(--text2); } .empty { padding:2rem; text-align:center; color:var(--text2); }
+  .msg { padding:.6rem .9rem; border-radius:8px; margin-bottom:.8rem; border:1px solid var(--border); background:var(--surface); } .msg.err { border-color:var(--red); color:var(--red); }
+  .hint { color:var(--text2); font-size:.8rem; line-height:1.45; } .prev { overflow:auto; margin-top:.6rem; } .prev table { min-width:0; font-size:.78rem; } .prev td, .prev th { padding:.25rem .5rem; }
+  .legend { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:.4rem 1.2rem; margin-top:.6rem; } .legend div { font-size:.8rem; color:var(--text2); }
+  .chip { display:inline-flex; gap:.4rem; align-items:center; background:var(--surface2); border:1px solid var(--accent); border-radius:99px; padding:.15rem .3rem .15rem .7rem; font-size:.8rem; }
+  .chip button { padding:0 .45rem; border-radius:99px; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>Base Template Analysis</h1>
+<p class="sub">Compare a URL analysis file (Document ID, Domain, Spider Template, URL) with the <a href="/base-templates">Base Templates</a> (Cached Domain, Monitoring Template). The two are joined on <b>domain</b>, and every row is flagged so you can see exactly what to fix: missing URLs, missing Spider Templates, and domains that have no Base Template.</p>
+<div id="msg"></div>
+
+<section class="panel" id="received" hidden>
+  <h2>Received from URL Analysis</h2>
+  <p class="hint" id="recvinfo"></p>
+  <div class="bar"><button id="recompare" type="button" class="primary">Compare again</button>
+    <a class="btn" href="/url-analysis">Back to URL Analysis</a>
+    <span class="hint">Compare again picks up any Base Templates you have added since.</span></div>
+</section>
+
+<section class="panel" id="step1">
+  <h2>1. Choose the URL analysis file <span class="hint">(or send URLs here from the URL Analysis page)</span></h2>
+  <input id="file" type="file" accept=".xlsx,.xlsm,.csv" aria-label="URL analysis file" />
+  <span class="hint"> .xlsx or .csv - the Excel file downloaded from URL Analysis works as it is.</span>
+  <div id="mapbox" hidden>
+    <p class="hint" id="fileinfo" style="margin-top:.7rem"></p>
+    <div class="map" id="map"></div>
+    <div class="prev" id="prev"></div>
+    <div class="bar"><button id="run" class="primary" type="button">Compare with Base Templates</button><span class="hint" id="basecount"></span></div>
+  </div>
+</section>
+
+<div id="results" hidden>
+  <div class="cards" id="cards"></div>
+  <div class="cards" id="flagcards"></div>
+  <div class="bar">
+    <a class="btn primary" id="dlall" href="#">Download full report</a>
+    <a class="btn" id="dlfix" href="#">Download rows needing fix</a>
+    <a class="btn" id="dlfil" href="#">Download current filter</a>
+    <span class="hint">The report has Review, Needs Fix, Domains, Base Templates Review and SUMMARY sheets.</span>
+  </div>
+  <div class="tabs" role="tablist">
+    <button class="tab on" data-view="rows" type="button">Documents</button>
+    <button class="tab" data-view="domains" type="button">Domains</button>
+    <button class="tab" data-view="base" type="button">Base Templates</button>
+  </div>
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search…" aria-label="Search" />
+    <select id="status" aria-label="Status"><option value="">Status: all</option><option>Needs fix</option><option>Check</option><option>OK</option></select>
+    <select id="flag" aria-label="Flag"><option value="">Flag: any</option></select>
+    <span id="chips"></span><button id="clear" type="button">Clear</button>
+  </div>
+  <div class="tablewrap"><table><thead><tr id="head"></tr></thead><tbody id="body"></tbody></table><div class="empty" id="empty" hidden></div></div>
+  <div class="pager"><button id="prev1" type="button">‹ Prev</button><span id="pageinfo"></span><button id="next1" type="button">Next ›</button></div>
+  <div class="panel"><h2>What the flags mean</h2><div class="legend" id="legend"></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const FLAGS = {{ flags|tojson }}, BASE_FLAGS = {{ base_flags|tojson }};
+  const ALL_FLAGS = Object.assign({}, FLAGS, BASE_FLAGS);
+  const FIELD = [["url", "URL *"], ["spidering_template", "Spider Template *"], ["domain", "Domain"], ["document_id", "Document ID"]];
+  const $ = id => document.getElementById(id);
+  const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+  const st = { view: "rows", q: "", status: "", flag: "", domain: "", page: 1 };
+  let up = null, rid = null, summary = null;
+
+  function say(kind, text) { const m = $("msg"); m.replaceChildren(); if (text) m.appendChild(el("div", "msg " + kind, text)); }
+  async function api(url, opt) {
+    opt = opt || {}; opt.headers = Object.assign({ "X-Requested-With": "fetch" }, opt.headers || {});
+    const r = await fetch(url, opt); let j = {}; try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error(j.error || ("Request failed (" + r.status + ")"));
+    return j;
+  }
+
+  // ── step 1: upload + column mapping ──────────────────────────────────────
+  function showUpload(d) {
+    up = d; $("mapbox").hidden = false;
+    $("fileinfo").textContent = d.filename + " · " + d.rows.toLocaleString() + " data rows · headings found on row " + d.header_row;
+    const box = $("map"); box.replaceChildren();
+    if (d.sheets.length > 1) {
+      const w = el("div"); w.appendChild(el("label", "", "Sheet")); const s = el("select"); s.id = "sheetsel";
+      d.sheets.forEach(n => s.appendChild(new Option(n, n))); s.value = d.sheet;
+      s.onchange = async () => { try { showUpload(await api("/api/bta/" + up.upload_id + "/sheet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sheet: s.value }) })); } catch (e) { say("err", e.message); } };
+      w.appendChild(s); box.appendChild(w);
+    }
+    FIELD.forEach(([k, label]) => {
+      const w = el("div"); const l = el("label", "", label); l.htmlFor = "m_" + k; w.appendChild(l);
+      const s = el("select"); s.id = "m_" + k; s.appendChild(new Option("(none)", ""));
+      d.columns.forEach(c => s.appendChild(new Option(c || "(blank heading)", c))); s.value = d.mapping[k] || "";
+      w.appendChild(s); box.appendChild(w);
+    });
+    const t = $("prev"); t.replaceChildren();
+    if (d.preview.length) {
+      const tb = el("table"), h = el("tr"); d.columns.forEach(c => h.appendChild(el("th", "", c))); tb.appendChild(h);
+      d.preview.forEach(r => { const tr = el("tr"); r.forEach(v => tr.appendChild(el("td", "", v))); tb.appendChild(tr); });
+      t.appendChild(tb);
+    }
+    const miss = FIELD.filter(([k]) => k !== "domain" && k !== "document_id" && !d.mapping[k]).map(f => f[1].replace(" *", ""));
+    say(miss.length ? "err" : "", miss.length ? "Could not find the " + miss.join(" and ") + " column - choose it below." : "");
+  }
+  $("file").onchange = async () => {
+    const f = $("file").files[0]; if (!f) return;
+    const fd = new FormData(); fd.append("file", f); say("", ""); $("mapbox").hidden = true; $("results").hidden = true;
+    try { showUpload(await api("/api/bta/upload", { method: "POST", body: fd })); } catch (e) { say("err", e.message); }
+  };
+  api("/api/base-templates?size=1").then(d => { $("basecount").textContent = d.summary.total + " Base Templates will be used"; }).catch(() => {});
+
+  $("run").onclick = async () => {
+    const mapping = {}; FIELD.forEach(([k]) => mapping[k] = $("m_" + k).value);
+    $("run").disabled = true; $("run").textContent = "Comparing…"; say("", "");
+    try {
+      const sheet = $("sheetsel") ? $("sheetsel").value : up.sheet;
+      const r = await api("/api/bta/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upload_id: up.upload_id, sheet, mapping }) });
+      await showResults(r);
+    } catch (e) { say("err", e.message); }
+    $("run").disabled = false; $("run").textContent = "Compare with Base Templates";
+  };
+
+  async function showResults(r) {
+    rid = r.result_id; summary = r.summary; Object.assign(st, { view: "rows", q: "", status: "", flag: "", domain: "", page: 1 });
+    $("q").value = ""; $("results").hidden = false; build(); await load();
+    $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ── rows sent from the URL Analysis page ─────────────────────────────────
+  const tid = new URLSearchParams(location.search).get("transfer");
+  async function compareTransfer() {
+    $("recompare").disabled = true; say("", "");
+    try {
+      const r = await api("/api/bta/from-transfer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transfer_id: tid }) });
+      $("recvinfo").textContent = r.received.toLocaleString() + " URL" + (r.received === 1 ? "" : "s") + " received from " + ((r.source && r.source.name) || "URL Analysis") + ". They were compared with the current Base Templates using each row's Document ID, Domain, Spider Template and URL. Row numbers are the positions in the URL Analysis results table.";
+      await showResults(r);
+    } catch (e) { say("err", e.message); }
+    $("recompare").disabled = false;
+  }
+  if (tid) { $("received").hidden = false; $("step1").hidden = true; $("recompare").onclick = compareTransfer; compareTransfer(); }
+
+  // ── results ──────────────────────────────────────────────────────────────
+  function card(parent, n, label, cls, onclick, on) {
+    const c = el(onclick ? "button" : "div", "card " + (cls || "") + (on ? " on" : "")); if (onclick) { c.type = "button"; c.onclick = onclick; }
+    c.appendChild(el("div", "n", Number(n).toLocaleString())); c.appendChild(el("div", "l", label)); parent.appendChild(c);
+  }
+  function build() {
+    const s = summary, c = $("cards"); c.replaceChildren();
+    card(c, s.dataset_rows, "Documents in file"); card(c, s.rows_needs_fix, "Need fixing", s.rows_needs_fix ? "bad" : "good", () => setFilter({ status: "Needs fix", flag: "" }), st.status === "Needs fix");
+    card(c, s.rows_check, "To check (info only)", s.rows_check ? "warn" : "good", () => setFilter({ status: "Check", flag: "" })); card(c, s.rows_ok, "OK", "good", () => setFilter({ status: "OK", flag: "" }));
+    card(c, s.base_rows, "Base Templates compared"); card(c, s.domains_without_base, "Domains with no Base Template", s.domains_without_base ? "bad" : "good");
+    const f = $("flagcards"); f.replaceChildren();
+    Object.entries(s.flags).forEach(([code, n]) => card(f, n, FLAGS[code].label, n ? (FLAGS[code].level === "error" ? "bad" : "warn") : "good", () => setFilter({ view: "rows", flag: code, status: "" }), st.flag === code));
+    Object.entries(s.base_flags).forEach(([code, n]) => card(f, n, "Base: " + BASE_FLAGS[code].label, n ? (BASE_FLAGS[code].level === "error" ? "bad" : "warn") : "good", () => setFilter({ view: "base", flag: code, status: "" }), st.view === "base" && st.flag === code));
+    const sel = $("flag"); sel.replaceChildren(new Option("Flag: any", ""));
+    Object.entries(st.view === "base" ? BASE_FLAGS : FLAGS).forEach(([k, v]) => sel.appendChild(new Option(v.label, k))); sel.value = st.flag;
+    $("status").hidden = st.view !== "rows"; $("status").value = st.status; $("flag").hidden = st.view === "domains";
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.view === st.view));
+    const ch = $("chips"); ch.replaceChildren();
+    if (st.domain) { const x = el("span", "chip", "Domain: " + st.domain); const b = el("button", "", "×"); b.type = "button"; b.setAttribute("aria-label", "Remove domain filter"); b.onclick = () => setFilter({ domain: "" }); x.appendChild(b); ch.appendChild(x); }
+    const lg = $("legend"); lg.replaceChildren();
+    Object.values(ALL_FLAGS).forEach(v => { const d = el("div"); d.appendChild(el("span", "badge " + v.level, v.label)); d.appendChild(document.createTextNode(v.help)); lg.appendChild(d); });
+    const qs = (scope) => "/api/bta/" + rid + "/download?" + new URLSearchParams({ scope, q: st.q, status: st.status, flag: st.view === "rows" ? st.flag : "", domain: st.domain });
+    $("dlall").href = qs("all"); $("dlfix").href = qs("fix"); $("dlfil").href = qs("filtered");
+  }
+  function setFilter(o) { Object.assign(st, o, { page: 1 }); if (o.view) st.status = o.status || ""; build(); load(); }
+
+  const HEADS = {
+    rows: ["Row", "Document ID", "Domain", "Spider Template", "URL", "Status", "Flags", "Base Template(s)", ""],
+    domains: ["Domain", "Documents", "Needing fix", "Missing URL", "Missing Spider Template", "Base Template(s)", "Status"],
+    base: ["Cached Domain", "Monitoring Template", "Documents in file", "Flags"],
+  };
+  function badges(td, flags) { flags.forEach(f => td.appendChild(el("span", "badge " + ALL_FLAGS[f].level, ALL_FLAGS[f].label))); return td; }
+  function statusBadge(s) { return el("span", "badge " + (s === "OK" ? "OK" : s === "Check" ? "Check" : "error"), s); }
+
+  async function load() {
+    const p = new URLSearchParams({ view: st.view, q: st.q, status: st.view === "rows" ? st.status : "", flag: st.view === "domains" ? "" : st.flag, domain: st.domain, page: st.page, size: 50 });
+    let d; try { d = await api("/api/bta/" + rid + "/rows?" + p); } catch (e) { say("err", e.message); return; }
+    const h = $("head"); h.replaceChildren(...HEADS[st.view].map(x => el("th", "", x)));
+    const b = $("body"); b.replaceChildren();
+    d.items.forEach(r => {
+      const tr = el("tr");
+      if (st.view === "rows") {
+        tr.append(el("td", "", r.source_row), el("td", "mono", r.document_id), el("td", "mono", r.domain + (r.domain_from_url ? "  (from URL)" : "")),
+          el("td", "mono", r.spidering_template), el("td", "url", r.url));
+        const s = el("td"); s.appendChild(statusBadge(r.status)); tr.appendChild(s);
+        tr.appendChild(badges(el("td"), r.flags)); tr.appendChild(el("td", "mono", r.base_templates.join(", ")));
+        const a = el("td");
+        if (r.flags.includes("NO_BASE_TEMPLATE")) { const l = el("a", "", "Add base template"); l.href = "/base-templates?add_domain=" + encodeURIComponent(r.domain); a.appendChild(l); }
+        tr.appendChild(a);
+      } else if (st.view === "domains") {
+        tr.className = "click"; tr.title = "Show this domain's documents"; tr.onclick = () => setFilter(r.domain === "(none)" ? { view: "rows", domain: "", status: "", flag: "MISSING_DOMAIN" } : { view: "rows", domain: r.domain, status: "", flag: "" });
+        tr.append(el("td", "mono", r.domain), el("td", "", r.rows), el("td", "", r.needs_fix), el("td", "", r.missing_url), el("td", "", r.missing_template), el("td", "mono", r.base_templates.join(", ")));
+        const s = el("td"); s.appendChild(statusBadge(r.status)); tr.appendChild(s);
+      } else {
+        tr.append(el("td", "mono", r.cached_domain), el("td", "mono", r.template), el("td", "", r.documents)); tr.appendChild(badges(el("td"), r.flags));
+      }
+      b.appendChild(tr);
+    });
+    $("empty").hidden = d.items.length > 0; $("empty").textContent = "Nothing matches the current search or filters.";
+    $("pageinfo").textContent = d.matched.toLocaleString() + " matching · page " + d.page + " of " + d.pages;
+    $("prev1").disabled = d.page <= 1; $("next1").disabled = d.page >= d.pages; st.page = d.page;
+  }
+
+  document.querySelectorAll(".tab").forEach(t => t.onclick = () => setFilter({ view: t.dataset.view, flag: "", status: "", domain: t.dataset.view === "rows" ? st.domain : "" }));
+  let deb; $("q").oninput = () => { clearTimeout(deb); deb = setTimeout(() => { st.q = $("q").value; st.page = 1; build(); load(); }, 250); };
+  $("status").onchange = () => setFilter({ status: $("status").value }); $("flag").onchange = () => setFilter({ flag: $("flag").value });
+  $("clear").onclick = () => { $("q").value = ""; setFilter({ q: "", status: "", flag: "", domain: "" }); };
+  $("prev1").onclick = () => { st.page--; load(); }; $("next1").onclick = () => { st.page++; load(); };
+})();
+</script>
+{% endblock %}
