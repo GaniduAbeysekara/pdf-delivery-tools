@@ -6,6 +6,7 @@ import threading
 import uuid
 from pathlib import Path
 
+from ..analysis.engine import MAX_SUPPLIED_HTML
 from ..analysis import (BookRecord, URLAnalysisResult, URLAnalyzer, analyze_urls, export_analysis_results)
 from ..logger import log
 
@@ -86,6 +87,32 @@ class UrlAnalysisService:
             return False
         self._launch(job, valid, True)
         return True
+
+    def apply_page_source(self, job_id: str, index: int, html: str) -> str:
+        """Re-analyse one row from HTML the user copied out of their browser. Returns '' or a user-facing error."""
+        job = self.get(job_id)
+        if not job:
+            return "Unknown analysis."
+        if job["state"] == "running":
+            return "Wait for the running analysis to finish first."
+        if not isinstance(index, int) or not 0 <= index < job["total"]:
+            return "That row does not exist."
+        if not html or "<" not in html:
+            return "Paste the page's HTML source."
+        job["records"][index].page_html = html[:MAX_SUPPLIED_HTML]
+        self._launch(job, [index], True)
+        return ""
+
+    def dataset_rows(self, job_id: str, indices: list[int] | None = None) -> list[dict] | None:
+        """Document ID / Domain / Spider Template / URL of finished results (all, or the rows at `indices`)
+        for the Base Template Analysis hand-off. `row` is the 1-based position in the results table."""
+        job = self.get(job_id)
+        if not job:
+            return None
+        with self._lock:
+            wanted = range(len(job["results"])) if indices is None else sorted({i for i in indices if isinstance(i, int)})
+            return [{"row": i + 1, "document_id": r.document_id, "domain": r.domain, "spidering_template": r.spidering_template, "url": r.url}
+                    for i in wanted if 0 <= i < len(job["results"]) and (r := job["results"][i]) is not None]
 
     def export(self, job_id: str, indices: list[int] | None = None) -> Path | None:
         """Excel export of every result, or only the rows at `indices` (the user's selection)."""

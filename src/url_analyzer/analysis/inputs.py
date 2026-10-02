@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 import re
 from dataclasses import dataclass, field
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import unquote, urlparse, urlunparse
 
 import pandas as pd
 
@@ -25,10 +25,12 @@ _TRAIL = ".,;:)]}>”'\""
 
 HEADER_ALIASES = {
     "document_id": ["document id", "documentid", "doc id", "docid", "book id", "bookid", "booksourceid",
-                    "book source id", "source id", "id", "code", "cubebookid"],
+                    "book source id", "source id", "id", "cubebookid"],
     "book_title": ["book title", "booktitle", "title", "name", "book name", "document title"],
     "url": ["url", "source url", "source link", "document url", "link", "link to the issuance", "source_link",
             "href", "web address", "document link"],
+    "code": ["code"],
+    "spidering_template": ["spidering template", "spideringtemplate"],
     "domain": ["domain", "source domain"],
     "api_result": ["api result", "apiresult", "result"],
     "book_type": ["book type", "booktype", "bookcategory", "book category", "category"],
@@ -60,6 +62,18 @@ def url_key(url: str) -> str:
     try:
         p = urlparse(url.strip())
         return urlunparse((p.scheme.lower(), p.netloc.lower(), p.path, p.params, p.query, ""))
+    except ValueError:
+        return url.strip()
+
+
+def document_key(url: str) -> str:
+    """Identity of a document address for deciding 'is this the same document?': http/https, 'www.', letter case of
+    the host, percent-encoding, a trailing slash and the #fragment are all ignored; the path and query are not."""
+    try:
+        p = urlparse(url.strip())
+        host = p.netloc.lower()
+        host = host[4:] if host.startswith("www.") else host
+        return urlunparse(("", host, unquote(p.path).rstrip("/") or "/", p.params, unquote(p.query), ""))
     except ValueError:
         return url.strip()
 
@@ -170,7 +184,8 @@ def parse_book_data(text: str) -> ParseOutcome:
                 items.append(BookRecord(
                     url=urls[0] if urls[0].lower().startswith("http") else "https://" + urls[0],
                     document_id=cell("document_id"), book_title=cell("book_title"), domain=cell("domain"),
-                    api_result=cell("api_result"), book_type=cell("book_type"), extra=extra))
+                    api_result=cell("api_result"), book_type=cell("book_type"), code=cell("code"),
+                    spidering_template=cell("spidering_template"), extra=extra))
             out.source_columns = extras_seen
         else:
             out.notes.append("No header row recognised; document ID, title and URL were detected from cell contents.")
@@ -220,6 +235,8 @@ class ExcelInspection:
     id_column: str | None
     title_column: str | None
     preview: list[dict]
+    code_column: str | None = None
+    template_column: str | None = None
 
 
 @dataclass
@@ -230,6 +247,8 @@ class ExcelRecords:
     id_column: str | None
     title_column: str | None
     sheet: str
+    code_column: str | None = None
+    template_column: str | None = None
     skipped_blank: int = 0
     notes: list[str] = field(default_factory=list)
 
@@ -308,11 +327,15 @@ def inspect_excel(path: str) -> ExcelInspection:
     url_col, confident, candidates = detect_url_column(df)
     exclude = {url_col} if url_col else set()
     id_col = _pick(df, "document_id", exclude)
-    title_col = _pick(df, "book_title", exclude | ({id_col} if id_col else set()))
+    taken = exclude | ({id_col} if id_col else set())
+    title_col = _pick(df, "book_title", taken)
+    taken |= {title_col} if title_col else set()
+    code_col = _pick(df, "code", taken)
+    template_col = _pick(df, "spidering_template", taken | ({code_col} if code_col else set()))
     preview = [{c: _cell_str(r[c]) for c in df.columns} for _, r in df.head(5).iterrows()]
     return ExcelInspection(sheet=sheet, columns=list(df.columns), row_count=len(df), url_column=url_col,
                            confident=confident, candidates=candidates, id_column=id_col, title_column=title_col,
-                           preview=preview)
+                           preview=preview, code_column=code_col, template_column=template_col)
 
 
 def _as_url(value: str) -> str:
@@ -324,7 +347,8 @@ def _as_url(value: str) -> str:
 
 
 def read_excel_records(path: str, url_column: str | None = None, id_column: str | None = None,
-                       title_column: str | None = None, *, sheet_df: tuple[pd.DataFrame, str] | None = None) -> ExcelRecords:
+                       title_column: str | None = None, code_column: str | None = None,
+                       template_column: str | None = None, *, sheet_df: tuple[pd.DataFrame, str] | None = None) -> ExcelRecords:
     """Excel rows -> BookRecords. Every source column is kept in `record.extra` (nothing is thrown away)
     and every row is kept - identical URLs on different rows are each reported (but fetched once)."""
     df, sheet = sheet_df or load_excel_frame(path)
@@ -341,7 +365,10 @@ def read_excel_records(path: str, url_column: str | None = None, id_column: str 
         raise InputError(f"The column '{id_column}' does not exist in the workbook.")
     if title_column and title_column not in df.columns:
         raise InputError(f"The column '{title_column}' does not exist in the workbook.")
-    mapped = {c for c in (url_column, id_column, title_column) if c}
+    for opt in (code_column, template_column):
+        if opt and opt not in df.columns:
+            raise InputError(f"The column '{opt}' does not exist in the workbook.")
+    mapped = {c for c in (url_column, id_column, title_column, code_column, template_column) if c}
     source_columns = [c for c in df.columns if c not in mapped]
 
     records, skipped = [], 0
@@ -355,6 +382,8 @@ def read_excel_records(path: str, url_column: str | None = None, id_column: str 
         records.append(BookRecord(
             url=url, document_id=cells.get(id_column, "") if id_column else "",
             book_title=cells.get(title_column, "") if title_column else "",
+            code=cells.get(code_column, "") if code_column else "",
+            spidering_template=cells.get(template_column, "") if template_column else "",
             domain=extract_domain(url), extra={c: cells[c] for c in source_columns}))
     if skipped:
         notes.append(f"{skipped} row(s) had no URL and were skipped.")
@@ -367,4 +396,5 @@ def read_excel_records(path: str, url_column: str | None = None, id_column: str 
     if shared:
         notes.append(f"{shared} row(s) repeat a URL from another row; each URL is fetched once and every row keeps its result.")
     return ExcelRecords(records=records, source_columns=source_columns, url_column=url_column,
-                        id_column=id_column, title_column=title_column, sheet=sheet, skipped_blank=skipped, notes=notes)
+                        id_column=id_column, title_column=title_column, sheet=sheet, skipped_blank=skipped, notes=notes,
+                        code_column=code_column, template_column=template_column)

@@ -112,6 +112,15 @@ def build_dataset(ui_path: str, pbi_path: str, progress: Progress | None = None)
         warnings.append("No source-link column was found; all domains are 'Unknown'.")
     export[C.DOMAIN_COL] = links.map(extract_domain)
 
+    # Code and SpideringTemplate of the matched Reg Transform record (same match as Book Type)
+    for out_col, carried, src in ((C.CODE_COL, match.ui_code, match.code_column),
+                                  (C.TEMPLATE_COL, match.ui_template, match.template_column)):
+        if out_col in pbi.columns:
+            warnings.append(f"The Power BI file already had a '{out_col}' column; it was replaced by the Reg Transform value.")
+        if src is None:
+            warnings.append(f"The Reg Transform CSV has no '{out_col}' column; the '{out_col}' column is empty.")
+        export[out_col] = carried.values
+
     _step(progress, "Generating backlog summaries...")
     api_norm = export[api_col].map(normalize_api_result)
     cat_of = {n: categorize_api(n) for n in api_norm.unique()}
@@ -125,7 +134,7 @@ def build_dataset(ui_path: str, pbi_path: str, progress: Progress | None = None)
     id_col = find_col(export, C.PBI_ID_COLS)
     title_col = find_col(export, C.PBI_TITLE_COLS)
     parts = [export[c].fillna("").astype(str) for c in (id_col, title_col, link_col) if c]
-    parts += [export[C.DOMAIN_COL], export["_api_label"]]
+    parts += [export[C.DOMAIN_COL], export["_api_label"], export[C.CODE_COL], export[C.TEMPLATE_COL]]
     search = parts[0]
     for p in parts[1:]:
         search = search + " | " + p
@@ -160,7 +169,8 @@ def build_dataset(ui_path: str, pbi_path: str, progress: Progress | None = None)
         "duplicate_ui_keys": match.duplicate_ui_keys, "duplicate_ui_rows": match.duplicate_ui_rows,
         "conflicting_duplicates": match.conflicting_duplicates, "blank_category": match.blank_category,
         "duplicate_pbi_keys": match.duplicate_pbi_keys, "ui_unmatched": match.ui_unmatched,
-        "low_match": low_match, "match_ui_key": match.ui_key, "match_pbi_key": match.pbi_key, "match_source": match.key_source,
+        "low_match": low_match, "code_found": int((export[C.CODE_COL] != "").sum()),
+        "template_found": int((export[C.TEMPLATE_COL] != "").sum()), "match_ui_key": match.ui_key, "match_pbi_key": match.pbi_key, "match_source": match.key_source,
         "book_type_counts": {str(k): int(v) for k, v in bt.value_counts().items()},
         "pdf_other": int(bt.isin(C.ACTION_BOOK_TYPES).sum()),
         "html_or_html_pdf": int(bt.isin([C.BT_HTML, C.BT_HTML_PDF]).sum()),

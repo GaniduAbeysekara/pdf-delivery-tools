@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Base Templates - PDF Delivery Tools{% endblock %}
+{% block head %}
+<style>
+  h1 { font-size:1.5rem; letter-spacing:-.3px; } .sub { color:var(--text2); margin:.25rem 0 1.1rem; max-width:900px; line-height:1.5; }
+  .cards { display:flex; flex-wrap:wrap; gap:.7rem; margin-bottom:1rem; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.7rem 1rem; min-width:150px; }
+  .card .n { font-size:1.5rem; font-weight:700; } .card .l { color:var(--text2); font-size:.76rem; margin-top:.1rem; }
+  .bar { display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; margin-bottom:.8rem; }
+  input, select, textarea { background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:.5rem .65rem; font:inherit; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  #q { flex:1; min-width:240px; }
+  button, .btn { background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:.5rem .9rem; font:inherit; font-weight:600; cursor:pointer; }
+  button:hover { border-color:var(--accent); } button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:var(--red); } button:disabled { opacity:.5; cursor:default; }
+  .tablewrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:auto; max-height:68vh; }
+  table { border-collapse:collapse; width:100%; min-width:900px; }
+  th, td { text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { position:sticky; top:0; background:var(--surface2); font-size:.76rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); cursor:pointer; white-space:nowrap; user-select:none; }
+  th.sorted { color:var(--text); } td.tpl { font-family:Consolas,monospace; font-size:.84rem; word-break:break-all; }
+  td.dom { word-break:break-word; max-width:340px; } td.cm { max-width:340px; white-space:pre-wrap; word-break:break-word; color:var(--text2); }
+  tr.fresh td { animation:flash 3s ease-out; } @keyframes flash { from { background:rgba(108,142,245,.35); } to { background:transparent; } }
+  td.act { white-space:nowrap; } td.act button { padding:.25rem .6rem; font-size:.78rem; }
+  .pill { display:inline-block; padding:.1rem .55rem; border-radius:99px; font-size:.76rem; font-weight:600; background:var(--surface2); border:1px solid var(--border); }
+  .pill.yes { color:var(--green); border-color:var(--green); } .pill.no { color:var(--yellow); border-color:var(--yellow); }
+  .pager { display:flex; gap:.6rem; align-items:center; margin:.7rem 0; color:var(--text2); }
+  .empty { padding:2rem; text-align:center; color:var(--text2); }
+  .msg { padding:.6rem .9rem; border-radius:8px; margin-bottom:.8rem; border:1px solid var(--border); background:var(--surface); }
+  .msg.err { border-color:var(--red); color:var(--red); } .msg.ok { border-color:var(--green); } .msg.warn { border-color:var(--yellow); }
+  dialog { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:1.3rem 1.4rem; width:min(560px,92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.6); } dialog h2 { font-size:1.1rem; margin-bottom:.8rem; }
+  label { display:block; font-size:.78rem; color:var(--text2); margin:.6rem 0 .2rem; } dialog input, dialog select, dialog textarea { width:100%; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; } .foot { display:flex; gap:.6rem; justify-content:flex-end; margin-top:1.1rem; }
+  .hint { color:var(--text2); font-size:.8rem; line-height:1.45; margin-top:.3rem; }
+  .live { color:var(--text2); font-size:.78rem; margin-left:auto; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>Base Templates</h1>
+<p class="sub">Every monitoring base template, with its cached domain, Replit status and developer. Add a row here when a new template is created, or import the latest <b>Base Template</b> sheet from <code>PDF Monitoring Templates.xlsx</code> to bring in rows added there. The page refreshes by itself.</p>
+
+<div id="msg"></div>
+<div class="cards" id="cards"></div>
+
+<div class="bar">
+  <input id="q" type="search" placeholder="Search template, domain, developer or comment…" aria-label="Search" />
+  <select id="replit" aria-label="Added to Replit"><option value="">Added to Replit: all</option></select>
+  <select id="dev" aria-label="Developer"><option value="">Developer: all</option></select>
+  <button id="clear" type="button">Clear</button>
+  <button id="add" class="primary" type="button">+ Add template</button>
+  <button id="imp" type="button">Import Excel</button>
+  <button id="exp" type="button">Download Excel</button>
+  <span class="live" id="live"></span>
+</div>
+
+<div class="tablewrap"><table>
+  <thead><tr id="head"></tr></thead>
+  <tbody id="body"></tbody>
+</table><div class="empty" id="empty" hidden></div></div>
+<div class="pager"><button id="prev" type="button">‹ Prev</button><span id="pageinfo"></span><button id="next" type="button">Next ›</button>
+  <select id="size" aria-label="Rows per page"><option>25</option><option selected>50</option><option>100</option><option>250</option></select></div>
+
+<dialog id="dlg">
+  <form id="form" method="dialog" autocomplete="off">
+    <h2 id="dlgtitle">Add template</h2>
+    <label for="f_template">Monitoring Template (SpideringTemplate) *</label>
+    <input id="f_template" required maxlength="300" placeholder="e.g. UNIVERSAL--DEFAULT--REG--PDF-MONITORING-BASE1" />
+    <label for="f_domain">Cached Domain</label>
+    <input id="f_domain" maxlength="500" placeholder="e.g. www.example.gov" />
+    <div class="hint">Saved as a plain hostname, like the Domain column in the other tools (https://, paths and ports are removed).</div>
+    <div class="row2">
+      <div><label for="f_created_date">Created Date</label><input id="f_created_date" type="date" /></div>
+      <div><label for="f_added_to_replit">Added to Replit</label><input id="f_added_to_replit" list="replitlist" maxlength="60" placeholder="Yes / No" /><datalist id="replitlist"></datalist></div>
+    </div>
+    <label for="f_dev_name">Dev Name</label>
+    <input id="f_dev_name" list="devlist" maxlength="100" /><datalist id="devlist"></datalist>
+    <label for="f_comments">Comments</label>
+    <textarea id="f_comments" rows="3" maxlength="2000"></textarea>
+    <div class="msg err" id="formerr" hidden></div>
+    <div class="foot"><button type="button" id="cancel">Cancel</button><button class="primary" id="save" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="impdlg">
+  <form id="impform" method="dialog">
+    <h2>Import from Excel</h2>
+    <p class="hint">In Excel / SharePoint choose <b>File → Download a Copy</b> for <i>PDF Monitoring Templates.xlsx</i>, then pick it here. The sheet called <b>Base Template</b> is used automatically.</p>
+    <label for="i_file">Excel file (.xlsx)</label>
+    <input id="i_file" type="file" accept=".xlsx,.xlsm" required />
+    <label for="i_mode">What to do with the rows</label>
+    <select id="i_mode">
+      <option value="add_new">Add only rows that are not here yet (recommended)</option>
+      <option value="replace">Replace the whole table with the sheet</option>
+    </select>
+    <p class="hint" id="i_hint">Rows already in the table are never duplicated. Existing rows you edited here are kept as they are.</p>
+    <div class="msg err" id="imperr" hidden></div>
+    <div class="foot"><button type="button" id="impcancel">Cancel</button><button class="primary" id="impgo" type="submit">Import</button></div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const FIELDS = {{ fields|tojson }}, LABELS = {{ labels|tojson }}, NOT_SET = "__blank__";
+  const COLS = [["created_date", "Created Date"], ["template", "Monitoring Template"], ["domain", "Cached Domain"],
+                ["added_to_replit", "Added to Replit"], ["dev_name", "Dev Name"], ["comments", "Comments"]];
+  const $ = id => document.getElementById(id);
+  const st = { q: "", replit: "", dev: "", sort: "created_date", dir: "desc", page: 1, size: 50 };
+  let editing = null, seen = null, timer = null, lastTotal = null;
+
+  try { Object.assign(st, JSON.parse(sessionStorage.getItem("bt_state") || "{}")); } catch (e) {}
+  $("q").value = st.q; $("size").value = String(st.size);
+
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  function say(kind, text) {
+    const m = $("msg"); m.replaceChildren();
+    if (!text) return;
+    const d = el("div", "msg " + kind, text); m.appendChild(d);
+    if (kind !== "err") setTimeout(() => { if (d.parentNode) d.remove(); }, 8000);
+  }
+  async function api(url, opt) {
+    opt = opt || {}; opt.headers = Object.assign({ "X-Requested-With": "fetch" }, opt.headers || {});
+    const r = await fetch(url, opt); let j = {};
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error(j.error || ("Request failed (" + r.status + ")"));
+    return j;
+  }
+  const params = () => new URLSearchParams({ q: st.q, replit: st.replit, dev: st.dev, sort: st.sort, dir: st.dir, page: st.page, size: st.size });
+
+  function head() {
+    const tr = $("head"); tr.replaceChildren();
+    COLS.forEach(([k, label]) => {
+      const th = el("th", st.sort === k ? "sorted" : "", label + (st.sort === k ? (st.dir === "asc" ? " ▲" : " ▼") : ""));
+      th.onclick = () => { if (st.sort === k) st.dir = st.dir === "asc" ? "desc" : "asc"; else { st.sort = k; st.dir = k === "created_date" ? "desc" : "asc"; } st.page = 1; load(); };
+      tr.appendChild(th);
+    });
+    tr.appendChild(el("th")).style.cursor = "default";
+  }
+
+  function fillSelect(sel, first, values, extraBlank, current) {
+    sel.replaceChildren(new Option(first, ""));
+    values.forEach(v => sel.appendChild(new Option(v, v)));
+    if (extraBlank) sel.appendChild(new Option("(not set)", NOT_SET));
+    sel.value = current;
+    if (sel.value !== current) { sel.value = ""; }
+  }
+
+  function cards(s) {
+    const c = $("cards"); c.replaceChildren();
+    const add = (n, l) => { const d = el("div", "card"); d.appendChild(el("div", "n", String(n))); d.appendChild(el("div", "l", l)); c.appendChild(d); };
+    add(s.total, "Base templates");
+    add(s.latest || "—", "Latest created date");
+    Object.entries(s.replit).slice(0, 4).forEach(([k, v]) => add(v, "Added to Replit: " + k));
+    add(s.without_domain, "Without a cached domain");
+  }
+
+  function pill(v) {
+    if (!v) return el("span", "", "");
+    const low = v.toLowerCase();
+    return el("span", "pill " + (["yes", "true", "y", "done"].includes(low) ? "yes" : ["no", "false", "n"].includes(low) ? "no" : ""), v);
+  }
+
+  function render(d) {
+    const body = $("body"); body.replaceChildren();
+    const ids = new Set(d.rows.map(r => r.id));
+    d.rows.forEach(r => {
+      const tr = el("tr", seen && !seen.has(r.id) ? "fresh" : "");
+      tr.appendChild(el("td", "", r.created_date));
+      tr.appendChild(el("td", "tpl", r.template));
+      tr.appendChild(el("td", "dom", r.domain));
+      const tdr = el("td"); tdr.appendChild(pill(r.added_to_replit)); tr.appendChild(tdr);
+      tr.appendChild(el("td", "", r.dev_name));
+      tr.appendChild(el("td", "cm", r.comments));
+      const act = el("td", "act");
+      const e = el("button", "", "Edit"); e.type = "button"; e.onclick = () => openForm(r);
+      const x = el("button", "danger", "Delete"); x.type = "button"; x.style.marginLeft = ".3rem"; x.onclick = () => remove(r);
+      act.append(e, x); tr.appendChild(act); body.appendChild(tr);
+    });
+    seen = ids;
+    $("empty").hidden = d.rows.length > 0;
+    $("empty").textContent = d.summary.total ? "No templates match the current search or filters." : "No templates yet. Use “Import Excel” to bring in the Base Template sheet, or “+ Add template”.";
+    $("pageinfo").textContent = d.matched + " matching · page " + d.page + " of " + d.pages;
+    $("prev").disabled = d.page <= 1; $("next").disabled = d.page >= d.pages;
+    st.page = d.page;
+  }
+
+  async function load(quiet) {
+    try {
+      const d = await api("/api/base-templates?" + params());
+      head(); render(d); cards(d.summary);
+      fillSelect($("replit"), "Added to Replit: all", Object.keys(d.summary.replit).filter(k => k !== "(not set)"), "(not set)" in d.summary.replit, st.replit);
+      fillSelect($("dev"), "Developer: all", d.summary.devs, true, st.dev);
+      $("replitlist").replaceChildren(...Object.keys(d.summary.replit).filter(k => k !== "(not set)").map(v => new Option(v, v)));
+      $("devlist").replaceChildren(...d.summary.devs.map(v => new Option(v, v)));
+      $("live").textContent = "Updated " + new Date().toLocaleTimeString();
+      if (quiet && lastTotal !== null && d.summary.total > lastTotal) say("ok", (d.summary.total - lastTotal) + " new row(s) appeared.");
+      lastTotal = d.summary.total;
+      try { sessionStorage.setItem("bt_state", JSON.stringify(st)); } catch (e) {}
+    } catch (e) { if (!quiet) say("err", e.message); else $("live").textContent = "Offline - retrying…"; }
+  }
+
+  function openForm(row) {
+    editing = row || null; $("formerr").hidden = true;
+    $("dlgtitle").textContent = row ? "Edit template" : "Add template";
+    FIELDS.forEach(f => { $("f_" + f).value = row ? row[f] : (f === "created_date" ? new Date().toISOString().slice(0, 10) : ""); });
+    $("dlg").showModal(); $("f_template").focus();
+  }
+  $("form").addEventListener("submit", async ev => {
+    ev.preventDefault(); $("save").disabled = true;
+    const data = {}; FIELDS.forEach(f => data[f] = $("f_" + f).value);
+    try {
+      const r = await api(editing ? "/api/base-templates/" + editing.id : "/api/base-templates",
+        { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      $("dlg").close();
+      say(r.warnings.length ? "warn" : "ok", (editing ? "Row updated. " : "Row added. ") + r.warnings.join(" "));
+      if (!editing) { st.sort = "created_date"; st.dir = "desc"; st.page = 1; }
+      await load();
+    } catch (e) { $("formerr").textContent = e.message; $("formerr").hidden = false; }
+    $("save").disabled = false;
+  });
+  $("cancel").onclick = () => $("dlg").close();
+  async function remove(r) {
+    if (!confirm("Delete the row for “" + r.template + "”? This cannot be undone.")) return;
+    try { await api("/api/base-templates/" + r.id, { method: "DELETE" }); say("ok", "Row deleted."); await load(); } catch (e) { say("err", e.message); }
+  }
+
+  $("imp").onclick = () => { $("imperr").hidden = true; $("impform").reset(); $("impdlg").showModal(); };
+  $("impcancel").onclick = () => $("impdlg").close();
+  $("i_mode").onchange = () => { $("i_hint").textContent = $("i_mode").value === "replace"
+    ? "The table will contain exactly the rows in the sheet. Rows added or edited only here will be lost (a backup of the previous table is kept in data/base_templates.bak)."
+    : "Rows already in the table are never duplicated. Existing rows you edited here are kept as they are."; };
+  $("impform").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    if ($("i_mode").value === "replace" && !confirm("Replace the whole table with the sheet?")) return;
+    const fd = new FormData(); fd.append("file", $("i_file").files[0]); fd.append("mode", $("i_mode").value);
+    $("impgo").disabled = true; $("impgo").textContent = "Importing…";
+    try {
+      const r = await api("/api/base-templates/import", { method: "POST", body: fd });
+      $("impdlg").close();
+      let t = "Imported from sheet “" + r.sheet + "”: " + r.added + " added, " + r.skipped_existing + " already present";
+      if (r.domains_reformatted) t += ", " + r.domains_reformatted + " domain(s) reformatted to plain hostnames";
+      if (r.domains_not_recognised) t += ", " + r.domains_not_recognised + " domain entr" + (r.domains_not_recognised === 1 ? "y" : "ies") + " not a web address (kept as written)";
+      if (r.rejected_count) t += ", " + r.rejected_count + " skipped as invalid (" + r.rejected.slice(0, 3).join("; ") + ")";
+      say(r.rejected_count || r.domains_not_recognised ? "warn" : "ok", t + ". Table now has " + r.total + " rows.");
+      st.page = 1; await load();
+    } catch (e) { $("imperr").textContent = e.message; $("imperr").hidden = false; }
+    $("impgo").disabled = false; $("impgo").textContent = "Import";
+  });
+  $("exp").onclick = () => { location.href = "/api/base-templates/export?" + params(); };
+
+  let deb; $("q").addEventListener("input", () => { clearTimeout(deb); deb = setTimeout(() => { st.q = $("q").value; st.page = 1; load(); }, 250); });
+  $("replit").onchange = () => { st.replit = $("replit").value; st.page = 1; load(); };
+  $("dev").onchange = () => { st.dev = $("dev").value; st.page = 1; load(); };
+  $("size").onchange = () => { st.size = +$("size").value; st.page = 1; load(); };
+  $("clear").onclick = () => { Object.assign(st, { q: "", replit: "", dev: "", page: 1 }); $("q").value = ""; load(); };
+  $("add").onclick = () => openForm(null);
+  $("prev").onclick = () => { st.page--; load(); };
+  $("next").onclick = () => { st.page++; load(); };
+
+  load();
+  const pre = new URLSearchParams(location.search).get("add_domain");   // link from Base Template Analysis
+  if (pre) { openForm(null); $("f_domain").value = pre; history.replaceState(null, "", location.pathname); }
+  timer = setInterval(() => { if (!document.hidden && !$("dlg").open && !$("impdlg").open) load(true); }, 15000);
+})();
+</script>
+{% endblock %}

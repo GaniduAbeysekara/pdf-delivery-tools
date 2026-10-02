@@ -223,8 +223,10 @@ def test_no_second_http_or_pdf_implementation_exists():
         if re.search(r"^\s*import pypdf|^\s*from pypdf", text, re.M) and rel not in ("pdf_analyzer.py",):
             offenders.append(rel)
     assert offenders == [], f"HTTP/PDF logic outside the shared engine: {offenders}"
+    # URL-analysis results have exactly one exporter (the Backlog report and the Base Templates sheet are different products)
     exporters = [p.relative_to(SRC).as_posix() for p in SRC.rglob("*.py")
-                 if re.search(r"TableStyleInfo", p.read_text(encoding="utf-8")) and "backlog" not in p.parts]
+                 if re.search(r"TableStyleInfo", p.read_text(encoding="utf-8"))
+                 and not {"backlog", "base_templates"} & set(p.parts)]
     assert exporters == ["analysis/export.py"], exporters
 
 

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PDF Delivery Tools - User Guide</title>
+<style>
+  :root {
+    --bg:#f6f7fb; --card:#ffffff; --text:#1b2033; --muted:#5b6478; --border:#dfe3ee; --accent:#3d5bd9;
+    --accent-bg:#e9edff; --ok:#12805c; --ok-bg:#dff5ec; --warn:#8a5a00; --warn-bg:#fff3d6; --bad:#b3261e; --bad-bg:#fde7e5;
+    --code-bg:#eef0f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f1117; --card:#1a1d27; --text:#e2e8f0; --muted:#a0aec0; --border:#2e3350; --accent:#8ea4ff; --accent-bg:#22294d;
+      --ok:#3ecf8e; --ok-bg:#12332a; --warn:#f6c945; --warn-bg:#3a3012; --bad:#ff8a80; --bad-bg:#3b1a18; --code-bg:#22263a;
+    }
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; scroll-padding-top:1rem; }
+  body { margin:0; font:15px/1.6 'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
+  .layout { display:flex; max-width:1180px; margin:0 auto; }
+  nav.toc { width:250px; flex-shrink:0; position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto; padding:1.5rem 1rem; }
+  nav.toc h2 { font-size:.72rem; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin:0 0 .6rem; }
+  nav.toc a { display:block; padding:.3rem .6rem; border-radius:6px; color:var(--muted); text-decoration:none; font-size:.9rem; }
+  nav.toc a:hover { background:var(--accent-bg); color:var(--accent); }
+  nav.toc a.sub { margin-left:.9rem; font-size:.84rem; }
+  main { flex:1; min-width:0; padding:1.5rem 1.5rem 4rem; }
+  header.hero { margin-bottom:1.5rem; }
+  header.hero h1 { font-size:2rem; margin:0 0 .3rem; letter-spacing:-.5px; }
+  header.hero p { color:var(--muted); margin:0; max-width:60ch; }
+  section { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.4rem 1.6rem; margin-bottom:1.2rem; }
+  h2 { font-size:1.35rem; margin:0 0 .8rem; letter-spacing:-.2px; }
+  h3 { font-size:1.05rem; margin:1.4rem 0 .5rem; }
+  h3:first-child { margin-top:0; }
+  p { margin:.5rem 0; } ul, ol { margin:.5rem 0; padding-left:1.4rem; } li { margin:.25rem 0; }
+  code, kbd { background:var(--code-bg); border-radius:4px; padding:.1rem .4rem; font:0.88em 'Cascadia Code',Consolas,monospace; }
+  pre { background:var(--code-bg); border-radius:8px; padding:.8rem 1rem; overflow:auto; font:0.88em/1.5 'Cascadia Code',Consolas,monospace; margin:.6rem 0; }
+  pre code { background:none; padding:0; }
+  table { border-collapse:collapse; width:100%; margin:.7rem 0; font-size:.92rem; }
+  th, td { text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { font-size:.74rem; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); background:var(--code-bg); }
+  td:first-child { white-space:nowrap; font-weight:600; }
+  .table-wrap { overflow-x:auto; }
+  .note, .tip, .warn { border-left:4px solid; border-radius:6px; padding:.65rem 1rem; margin:.9rem 0; font-size:.93rem; }
+  .note { background:var(--accent-bg); border-color:var(--accent); }
+  .tip { background:var(--ok-bg); border-color:var(--ok); }
+  .warn { background:var(--warn-bg); border-color:var(--warn); }
+  .steps { counter-reset:step; list-style:none; padding:0; }
+  .steps > li { counter-increment:step; position:relative; padding:.2rem 0 .2rem 2.6rem; margin:.7rem 0; }
+  .steps > li::before { content:counter(step); position:absolute; left:0; top:.1rem; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.9rem; }
+  .pill { display:inline-block; padding:.05rem .55rem; border-radius:999px; font-size:.78rem; font-weight:700; }
+  .pill.ok { background:var(--ok-bg); color:var(--ok); } .pill.warn { background:var(--warn-bg); color:var(--warn); }
+  .pill.bad { background:var(--bad-bg); color:var(--bad); } .pill.info { background:var(--accent-bg); color:var(--accent); }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1rem; }
+  .mini { border:1px solid var(--border); border-radius:10px; padding:1rem 1.1rem; }
+  .mini h3 { margin-top:0; }
+  @media (max-width:860px) { nav.toc { display:none; } main { padding:1rem; } }
+  @media print { nav.toc { display:none; } section { break-inside:avoid; } body { background:#fff; } }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <h2>Contents</h2>
+    <a href="#start">1. Getting started</a>
+    <a href="#backlog">2. Daily Backlog Dashboard</a>
+    <a class="sub" href="#backlog-files">Files you need</a>
+    <a class="sub" href="#backlog-steps">Step by step</a>
+    <a class="sub" href="#backlog-quality">Data-quality panel</a>
+    <a class="sub" href="#backlog-booktype">Book Type</a>
+    <a class="sub" href="#backlog-views">Views and action lists</a>
+    <a class="sub" href="#backlog-filters">Filters and search</a>
+    <a class="sub" href="#backlog-downloads">Selecting and downloading</a>
+    <a href="#urls">3. URL Analysis</a>
+    <a class="sub" href="#urls-inputs">The three input tabs</a>
+    <a class="sub" href="#urls-what">What is checked</a>
+    <a class="sub" href="#urls-dashboard">The results dashboard</a>
+    <a class="sub" href="#urls-export">Downloads</a>
+    <a href="#templates">4. Base Templates</a>
+    <a class="sub" href="#templates-use">Finding, adding and editing rows</a>
+    <a class="sub" href="#templates-sheet">Keeping it in step with the Excel sheet</a>
+    <a href="#analysis">5. Base Template Analysis</a>
+    <a class="sub" href="#analysis-steps">Step by step</a>
+    <a class="sub" href="#analysis-flags">The flags</a>
+    <a class="sub" href="#analysis-report">The Excel report</a>
+    <a href="#glossary">6. Reading the results</a>
+    <a href="#cli">7. Command line</a>
+    <a href="#settings">8. Settings</a>
+    <a href="#trouble">9. Troubleshooting</a>
+    <a href="#privacy">10. Data and safety</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <h1>PDF Delivery Tools</h1>
+      <p>User guide for the Daily Backlog Dashboard and the URL Analysis tool - what to upload, what each screen shows, and how to read the results.</p>
+    </header>
+
+    <!-- ───────────────────────── 1 ───────────────────────── -->
+    <section id="start">
+      <h2>1. Getting started</h2>
+      <p>PDF Delivery Tools is a web page that runs on your own computer. It has four tools, reachable from the sidebar:</p>
+      <div class="grid2">
+        <div class="mini"><h3>Daily Backlog Dashboard</h3><p>Combine the Reg Transform UI export and the Power BI export, explore the PDF backlog, and produce the daily Excel report.</p></div>
+        <div class="mini"><h3>URL Analysis</h3><p>Check any list of URLs: is it working, is it a PDF or a page with PDFs, how many pages, what language, when was it last modified.</p></div>
+        <div class="mini"><h3>Base Templates</h3><p>The team's Base Template sheet inside the tool: search every monitoring template, add new rows, and import the latest sheet from Excel.</p></div>
+        <div class="mini"><h3>Base Template Analysis</h3><p>Compare a URL analysis file with the Base Templates, joined on domain, and get every row flagged for review.</p></div>
+      </div>
+      <h3>Start the tool</h3>
+      <ol class="steps">
+        <li>Open a terminal in the project folder (the one containing <code>run_dashboard.bat</code>).<br />First time only: <code>pip install -r requirements.txt</code></li>
+        <li>Run <code>.\run_dashboard.bat</code></li>
+        <li>Open <a href="http://localhost:8080">http://localhost:8080</a> in your browser. Use the sidebar to switch tools - you do not need to restart anything.</li>
+        <li>To stop it, press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal window.</li>
+      </ol>
+      <div class="note">The page is only available on your own computer (<code>127.0.0.1</code>). To use another port, set the <code>PORT</code> environment variable before starting.</div>
+    </section>
+
+    <!-- ───────────────────────── 2 ───────────────────────── -->
+    <section id="backlog">
+      <h2>2. Daily Backlog Dashboard</h2>
+      <p>Use this each morning to see the PDF book backlog: how many books, which domains and API Results they belong to, and which need action.</p>
+
+      <h3 id="backlog-files">Files you need</h3>
+      <div class="table-wrap"><table>
+        <tr><th>File</th><th>Where it comes from</th><th>Notes</th></tr>
+        <tr><td>Reg Transform UI export</td><td>Reg Transform UI &rarr; export the full status report. Named like <code>StartPointStatus-01-Oct-2026.csv</code>.</td><td>Use the <b>full</b> export (about 60,000 rows). Several files with similar names can sit in Downloads - a 28-row file is a partial export and will not work properly.</td></tr>
+        <tr><td>Power BI export</td><td>Power BI &rarr; Details Table &rarr; export to Excel. Named like <code>Details Table (43).xlsx</code>.</td><td>Must be for the same day as the CSV.</td></tr>
+      </table></div>
+
+      <h3 id="backlog-steps">Step by step</h3>
+      <ol class="steps">
+        <li>Open <b>Daily Backlog Dashboard</b> in the sidebar.</li>
+        <li>Choose the <b>Reg Transform UI Export</b> (.csv) and the <b>Power BI Details Table Export</b> (.xlsx). The file names appear under the boxes.</li>
+        <li>Click <b>Generate Daily Report</b>. Progress steps appear (loading, matching Book Types, extracting domains, summaries...).</li>
+        <li>The dashboard appears after about 15-30 seconds. The Excel report keeps building in the background (about a minute for a large CSV); the <b>Download Excel Report</b> button turns green when it is ready. You can already use the dashboard meanwhile.</li>
+        <li>Review the <b>Data quality</b> panel first (see below), then use the cards, filters and tabs.</li>
+      </ol>
+      <div class="tip">Your filters, tab and selected books are remembered. If you open URL Analysis and come back, the dashboard is restored - you do not need to upload the files again. <b>Reset Dashboard</b> clears everything.</div>
+
+      <h3 id="backlog-quality">Data-quality panel</h3>
+      <p>Always check this before trusting the numbers.</p>
+      <div class="table-wrap"><table>
+        <tr><th>Item</th><th>Meaning</th></tr>
+        <tr><td>PBI records</td><td>Rows in the Power BI file - these are the books shown in the dashboard.</td></tr>
+        <tr><td>UI records</td><td>Rows in the Reg Transform CSV.</td></tr>
+        <tr><td>BookCategory matched</td><td>Power BI books whose <code>BookSourceId</code> was found as a <code>DocumentId</code> in the CSV.</td></tr>
+        <tr><td>Unmatched</td><td>Power BI books with no CSV record. They stay in the data with Book Type <code>Unmatched</code>.</td></tr>
+        <tr><td>Duplicate UI identifiers</td><td>A <code>DocumentId</code> appearing more than once in the CSV (the first occurrence is used). Should normally be 0.</td></tr>
+        <tr><td>Blank BookCategory (Unknown)</td><td>Matched books whose <code>BookCategory</code> is empty in the CSV.</td></tr>
+      </table></div>
+      <div class="warn"><b>LOW MATCH warning (red box).</b> If fewer than 80% of Power BI books are found in the CSV, the tool warns you. It almost always means the CSV is a partial or filtered export, or belongs to a different day. Upload the full export for the same day, otherwise the Book Type list and counts are incomplete.</div>
+
+      <h3 id="backlog-booktype">Book Type</h3>
+      <p>Book Type is taken from the <code>BookCategory</code> column of the Reg Transform CSV. The link between the two files is <b>Power BI <code>BookSourceId</code> = CSV <code>DocumentId</code></b>. The Power BI file only provides the link.</p>
+      <div class="table-wrap"><table>
+        <tr><th>Book Type</th><th>Meaning</th><th>In the action lists?</th></tr>
+        <tr><td>PDF, Other</td><td>The CSV value.</td><td><span class="pill ok">Yes</span></td></tr>
+        <tr><td>HTML, HTML + PDF</td><td>The CSV value.</td><td><span class="pill warn">No</span> - counted everywhere else</td></tr>
+        <tr><td>Unknown</td><td>Matched, but the CSV <code>BookCategory</code> is blank.</td><td><span class="pill warn">No</span></td></tr>
+        <tr><td>Unmatched</td><td>No CSV record for this book.</td><td><span class="pill warn">No</span></td></tr>
+      </table></div>
+      <p>Any new <code>BookCategory</code> value that appears in the CSV is kept as written and shows up in the Book Type filter automatically.</p>
+      <p>The CSV <code>Code</code> and <code>SpideringTemplate</code> of each matched book are added as two columns (blank when unmatched or empty).</p>
+
+      <h3 id="backlog-views">Views and action lists</h3>
+      <p>The cards at the top show counts for the current filters; click a card to jump to its view. The tabs show the books behind the numbers:</p>
+      <div class="table-wrap"><table>
+        <tr><th>Tab</th><th>Contains</th></tr>
+        <tr><td>Overview</td><td>Charts (API Result, top domains, Book Type), a domain summary table and an API Result summary. Click a bar or a row to filter.</td></tr>
+        <tr><td>All Books</td><td>Every book, including HTML and Unknown/Unmatched.</td></tr>
+        <tr><td>Change &amp; Potential Change</td><td>API Result <code>Change</code> or <code>Stream 3 - Potential Changes BAU skim</code> &mdash; and Book Type PDF or Other.</td></tr>
+        <tr><td>EVC Open Task</td><td><code>Stream 5 - Externally Verified Changed - Open Task</code> &mdash; and Book Type PDF or Other.</td></tr>
+        <tr><td>External Verified Change</td><td><code>Stream 5 - Externally Verified Changed</code> &mdash; and Book Type PDF or Other.</td></tr>
+        <tr><td>Dev Attention</td><td>Stream 2 issues: Monitoring Failure, Source Modified, Template Error, Image Base64 Issue &mdash; and Book Type PDF or Other.</td></tr>
+      </table></div>
+      <p>API Result matching ignores capital letters and extra spaces, so <code>Change</code>, <code>CHANGE</code> and <code> change </code> are the same value. Colours: <span class="pill warn">yellow</span> BAU review, <span class="pill info">pink</span> verification, <span class="pill bad">red</span> developer attention.</p>
+
+      <h3 id="backlog-filters">Filters and search</h3>
+      <ul>
+        <li><b>Multi-select filters:</b> Domain, API Result, Book Type, plus Status, Owner, Language, Jurisdiction and Issuing Body when the Power BI file has them. Tick values, then click <b>Apply Filters</b>.</li>
+        <li><b>Code</b> and <b>Spidering Template</b> boxes: type part of a value (not case-sensitive). They update as you type, and can be combined with every other filter.</li>
+        <li><b>Search:</b> looks in Document ID, title, domain, link, API Result, Code and Spidering Template. Several words must all match.</li>
+        <li><b>Date range:</b> filters on the API Result change date when that column exists.</li>
+        <li>Active filters show as chips - click &times; on a chip to remove it, or <b>Clear Filters</b> to remove all. The line "Showing X of Y books" always tells you what is on screen.</li>
+        <li>In the Overview, clicking a domain row or an API Result row applies that filter.</li>
+      </ul>
+
+      <h3 id="backlog-downloads">Selecting books and downloading</h3>
+      <ul>
+        <li>Tick books in the table (tick the header box for the whole page, or <b>Select all in filtered view</b> for everything that matches). Selections survive paging and filtering. Use <b>Columns</b> to choose which columns the table shows.</li>
+        <li><b>Download Selected</b> &rarr; a CSV of only the ticked books.</li>
+        <li><b>Download Current Filtered Data</b> &rarr; a CSV of everything matching the current filters and tab.</li>
+        <li><b>Download Excel Report</b> &rarr; the complete workbook, named after the Power BI file (<code>&lt;name&gt;_Report.xlsx</code>), with 7 tabs:</li>
+      </ul>
+      <div class="table-wrap"><table>
+        <tr><th>#</th><th>Tab</th><th>Contents</th></tr>
+        <tr><td>1</td><td>UI DD-Mon-YYYY</td><td>The whole Reg Transform CSV, as an Excel table.</td></tr>
+        <tr><td>2</td><td>Export</td><td>The whole Power BI data plus <b>Book Type</b>, <b>Domain</b>, <b>Code</b> and <b>SpideringTemplate</b>.</td></tr>
+        <tr><td>3</td><td>Pivot</td><td>Eight summary tables (counts by API Result, Book Type and domain), colour-coded.</td></tr>
+        <tr><td>4-7</td><td>Change and Potential Change / EVC Open Task / External Verified Change / Stream 2 - Dev Attn Needed</td><td>The action lists (PDF and Other books only), with all the columns of the Export tab.</td></tr>
+      </table></div>
+      <h3>Send books to URL Analysis</h3>
+      <p>Select books and click <b>Analyze Selected URLs</b>. Their source links open in the URL Analysis tool, together with Document ID, title, domain, API Result and Book Type. Blank and duplicate links are dropped (the screen tells you how many).</p>
+    </section>
+
+    <!-- ───────────────────────── 3 ───────────────────────── -->
+    <section id="urls">
+      <h2>3. URL Analysis</h2>
+      <p>One tool with four ways of giving it URLs (Paste URLs, Excel Batch Upload, From Daily Backlog, Page Source). Whichever you use, every URL is checked in exactly the same way and the results appear in the same dashboard and the same Excel file.</p>
+
+      <h3 id="urls-inputs">The three input tabs</h3>
+      <div class="table-wrap"><table>
+        <tr><th>Tab</th><th>How to use it</th></tr>
+        <tr><td>Paste URLs</td><td>Paste one URL per line (a column copied from Excel works), then click <b>Analyze URLs</b>. If you paste several columns copied from Excel (for example Document ID, Book Title, URL) the columns are recognised automatically. Repeated URLs are checked once. Lines that are not URLs are kept and reported as failed so nothing disappears silently.</td></tr>
+        <tr><td>Excel Batch Upload</td><td>Choose an .xlsx or .xls file. The tool finds the URL column from the header (URL, Source URL, Source Link, Link, Document URL...) or from the cell contents and shows "detected automatically". If it is not sure, choose it from the <b>Select URL Column</b> list. Optionally pick the Document ID, Book Title, <b>Code</b> and <b>SpideringTemplate</b> columns (they are suggested automatically when the headers match). Click <b>Analyze Excel</b>. <b>Every row and every original column is kept</b> in the results.</td></tr>
+        <tr><td>From Daily Backlog</td><td>Fills itself when you click <b>Analyze Selected URLs</b> in the backlog. Click <b>Analyze URLs</b>. The <b>&larr; Back to Daily Backlog</b> button returns you to the dashboard exactly as you left it.</td></tr>
+        <tr><td>Page Source</td><td>For pages the tool cannot read itself, typically sites that show automated clients a "verifying you are human" page (status <b>BLOCKED</b>). Open the page in your own browser and wait until it has fully loaded. Then press <kbd>Ctrl</kbd>+<kbd>U</kbd>, <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd> (pages whose links appear only after JavaScript runs: press <kbd>F12</kbd> &rarr; Console and run <code>copy(document.documentElement.outerHTML)</code>; Chrome may ask you to type <code>allow pasting</code> first). Enter the page address, paste the source (or load a saved .html file) and click <b>Analyze page source</b>. The page is <b>not</b> requested again - the tool reads the links in what you pasted and then fetches only the document they point to, reporting pages, language and last modified as usual. Optional Document ID and Book Title are kept in the results.<br /><b>Shortcut:</b> on any BLOCKED row of the results table, click <b>Paste page source</b> to fix just that row without starting over.</td></tr>
+      </table></div>
+      <div class="note">Up to 5,000 URLs per run. Analysis runs in the background and the table fills as results arrive.</div>
+
+      <h3 id="urls-what">What is checked for each URL</h3>
+      <ol>
+        <li><b>Does it work?</b> Redirects are followed and the final address is analysed.</li>
+        <li><b>Is it a document?</b> A direct PDF/DOC/DOCX is recognised from what the server sends back, not just from <code>.pdf</code> in the address.</li>
+        <li><b>If it is a normal web page (a "landing page")</b>, the page is searched for document links (links, frames, embeds and objects). Links are cleaned and de-duplicated. Links without <code>.pdf</code> in the address (for example <code>/notice/123/pdf</code>, <code>/download?id=7</code>, <code>?format=pdf</code>) are also recognised from hints such as a <code>pdf</code>/<code>download</code> class, a <code>download</code> or <code>type="application/pdf"</code> attribute, "View PDF"/"Download" text or icons, or a <code>citation_pdf_url</code> / alternate-PDF declaration in the page. A hint is never trusted on its own: each candidate is requested and only counted if the server really returns a document (by its Content-Type or download file name).
+          <ul>
+            <li><b>NONE</b> - no document link found.</li>
+            <li><b>SINGLE</b> - exactly one document: it is opened automatically and its page count, language, last-modified date and size are reported.</li>
+            <li><b>MULTIPLE</b> - more than one document: the number is reported and nothing is chosen for you. All the links are listed on the <i>Document Links</i> sheet of the export.</li>
+          </ul>
+          <p style="margin-top:.5rem"><b>Documents shown inside the page (iframe).</b> Many pages display the PDF in a frame rather than linking to it. These count as the page's document: a frame pointing at a PDF, a PDF viewer wrapper (for example <code>viewer.html?file=report.pdf</code>, Google or Office viewers, Google Drive previews), a frame whose address has no <code>.pdf</code> but serves a document, and a frame that holds another page which contains the PDF (followed two levels deep). Buttons that open a file (a <code>data-href</code> or an <code>onclick="window.open(...)"</code> address) count like links. Video, social, ad and hidden frames are ignored.</p>
+          <p><b>Frame and button together.</b> When the page has both a viewer frame and a download link or button, the tool checks whether they lead to the <b>same document</b> (ignoring <code>http</code>/<code>https</code>, <code>www.</code>, upper/lower case and <code>#page=</code> parts, and following redirects). Same document: reported as <b>SINGLE</b>. Different documents: reported as <b>MULTIPLE</b>. The <i>Notes</i> column says which case it was.</p>
+        </li>
+        <li><b>Document details:</b> page count, language (from the document text; <code>Unknown</code> if there is too little text, e.g. a scan), last modified (from the web server, otherwise from the PDF itself) and file size.</li>
+      </ol>
+      <p>The tool is careful with websites: it waits between requests to the same site, retries after temporary errors with increasing delays, respects "too many requests" replies, and keeps going if one URL fails.</p>
+
+      <h3 id="urls-dashboard">The results dashboard</h3>
+      <ul>
+        <li><b>Header:</b> shows the <b>Source</b> (Manual URL Input, Excel Batch Upload with the file name, or Daily Backlog) and a progress bar while URLs are being checked.</li>
+        <li><b>Cards:</b> Total URLs, Working, Not Working, Direct PDF, Direct Document, Landing Page, Single Document Link, Multiple Document Links, No Document Link, Unknown, Total Pages.</li>
+        <li><b>Quick pills:</b> All, Working, Redirected, Not working, Documents, Landing page, Single link, Multiple links, No link, Unknown, Failed - each with its count. One click filters the table.</li>
+        <li><b>Status summary:</b> bars for Status, URL type, Document links and Analysis status. Click a bar to filter.</li>
+        <li><b>Overview by domain:</b> one row per website with its totals, working/not working, document types, link types and total pages. Click a row to filter everything to that domain; click it again to clear.</li>
+        <li><b>Filters:</b> Domain, HTTP Status, Status, URL Type, Content Type, Document Link Type, Analysis Status, Direct Document, Language. The <b>Code</b> and <b>SpideringTemplate</b> boxes search those two columns (part of a value is enough, capitals ignored). <b>Search</b> looks in Document ID, title, Code, SpideringTemplate, URL, domain, final URL, document URL, type and error. "Showing X of Y URLs" is always shown.</li>
+        <li><b>Code and SpideringTemplate</b> come with books sent from the Daily Backlog, or from the matching columns of an uploaded Excel / pasted table. They appear as table columns and in every download whenever at least one URL has them.</li>
+        <li><b>Table:</b> click a column heading to sort; 100 rows per page; hover over a Link Type badge to see the document links found. Tick rows to select them.</li>
+        <li><b>Cached results:</b> a URL checked within the last hour is reused instead of being fetched again. Such rows are marked <span class="pill info">cached</span> and a yellow note tells you how old they are. Use <b>Re-analyze Selected</b> or <b>Re-analyze All</b> for a fresh live check.</li>
+      </ul>
+
+      <h3 id="urls-export">Downloads</h3>
+      <ul>
+        <li><b>Download Analysis Results</b> - every result.</li>
+        <li><b>Download Selected (N)</b> - only the ticked rows. <b>Select all filtered</b> ticks everything matching the current filters first.</li>
+        <li><b>Copy selected URLs</b> - puts the chosen URLs on the clipboard.</li>
+        <li><b>Send to Base Template Analysis</b> - takes you to <a href="#analysis">Base Template Analysis</a> with the ticked rows (or every result when nothing is ticked), already compared with the Base Templates. Each row's Document ID, Domain, Spider Template and URL are sent.</li>
+      </ul>
+      <p>The Excel file has three sheets: <b>URL Analysis</b> (a formatted table; Document ID, Book Title, URL, Domain, HTTP Status, Final URL, Content Type, Direct Document, Page Count, File Size, Language, Last Modified, Analysis Status, Error, then the extra detail columns and - for Excel uploads - all your original columns), <b>Document Links</b> (every document found on landing pages) and <b>SUMMARY</b> (the counts, the source and when it was made).</p>
+    </section>
+
+    <!-- ───────────────────────── 4 ───────────────────────── -->
+    <section id="templates">
+      <h2>4. Base Templates</h2>
+      <p>The <b>Base Templates</b> page (sidebar) shows the <b>Base Template</b> sheet of <i>PDF Monitoring Templates.xlsx</i>: one row per monitoring base template, with its created date, cached domain, whether it was added to Replit, the developer and comments.</p>
+      <h3 id="templates-use">Finding, adding and editing rows</h3>
+      <ul>
+        <li><b>Search</b> looks in every column at once; type several words to narrow the list (all words must match). <b>Added to Replit</b> and <b>Developer</b> filter the list, and "(not set)" finds rows where that value is empty.</li>
+        <li>Click a column heading to sort; click again to reverse. Empty values always sort last.</li>
+        <li><b>Cached Domain</b> is always stored as a plain lowercase hostname, exactly like the Domain column in the Daily Backlog and URL Analysis tools: <code>https://WWW.Example.gov/path/</code> becomes <code>www.example.gov</code>. This happens when you type it and when you import. Several domains in one cell (separated by commas, semicolons or new lines) are tidied the same way and kept together; text that is not a web address is kept as written, and the import message tells you how many.</li>
+        <li><b>+ Add template</b> opens a form. Only the template name is required (no spaces). A new row appears at the top straight away, and the cards above the table update.</li>
+        <li><b>Edit</b> and <b>Delete</b> are at the end of each row. Delete asks you to confirm and cannot be undone.</li>
+        <li>The page checks for changes every 15 seconds while it is open, so rows added by someone else using the same running tool appear by themselves and flash briefly.</li>
+        <li><b>Download Excel</b> saves the rows you are currently looking at (search and filters applied) in the same column layout as the team's sheet.</li>
+      </ul>
+      <h3 id="templates-sheet">Keeping it in step with the Excel sheet</h3>
+      <p>The tool keeps its own copy of the table on your computer (<code>data/base_templates.json</code>, excluded from git). It cannot read the SharePoint file directly, so the sheet and the tool are brought together with <b>Import Excel</b>:</p>
+      <ol class="steps">
+        <li>Open <i>PDF Monitoring Templates.xlsx</i> in Excel or SharePoint and choose <b>File → Download a Copy</b>.</li>
+        <li>On the Base Templates page click <b>Import Excel</b> and pick the file. The sheet called <b>Base Template</b> is found automatically, even if there are title rows above the headings.</li>
+        <li>Leave <b>Add only rows that are not here yet</b> selected. Rows that are already in the tool are not duplicated and anything you edited in the tool is kept, so you can repeat this whenever new rows have been added to the sheet.</li>
+      </ol>
+      <div class="note"><b>Replace the whole table</b> makes the tool match the sheet exactly. Rows that exist only in the tool are lost; the previous table is saved as <code>data/base_templates.bak</code> (one step back).</div>
+      <p>Rows you add in the tool are <b>not</b> written back to SharePoint. Add them to the sheet as well, or download the Excel file from the tool and paste the new rows in.</p>
+    </section>
+
+    <!-- ───────────────────────── 5 ───────────────────────── -->
+    <section id="analysis">
+      <h2>5. Base Template Analysis</h2>
+      <p>This page compares two datasets and tells you what is missing:</p>
+      <ul>
+        <li><b>Dataset A - the URL analysis file you upload:</b> Document ID, Domain, Spider Template and URL (the Excel file downloaded from URL Analysis works as it is, and so does any .xlsx / .csv with those columns).</li>
+        <li><b>Dataset B - the Base Templates page:</b> Cached Domain and Monitoring Template. The current table is used every time you run the comparison, so rows you just added are included.</li>
+      </ul>
+      <p>They are <b>joined on domain</b>: both sides are turned into a plain lowercase hostname first (<code>https://WWW.Example.gov/a</code> becomes <code>www.example.gov</code>), and a Base Template whose Cached Domain holds several domains is joined on each of them.</p>
+      <h3 id="analysis-steps">Step by step</h3>
+      <ol class="steps">
+        <li>Either open <b>Base Template Analysis</b> in the sidebar and choose your file, <b>or</b> run an analysis on the URL Analysis page and click <b>Send to Base Template Analysis</b> - the rows arrive already compared (skip to step 4). On that page <b>Compare again</b> repeats the comparison with the latest Base Templates; the row numbers are positions in the URL Analysis results table.</li>
+        <li>Check the column choices. The tool finds the URL, Spider Template, Domain and Document ID columns by their headings (even when title rows sit above them); change any that are wrong. <b>URL</b> and <b>Spider Template</b> are required; if there is no Domain column the domain is taken from the URL.</li>
+        <li>Click <b>Compare with Base Templates</b>. The cards show how many documents need fixing; click a card to see just those rows.</li>
+        <li>Work through the <b>Documents</b> tab (one row per document, with its <b>Row</b> number in your file), the <b>Domains</b> tab (one line per domain - click one to see its documents) and the <b>Base Templates</b> tab (the other side of the join).</li>
+        <li>Fix the problems at the source: correct your file, or use <b>Add base template</b> on a row to open the Base Templates form with the domain filled in. Then upload / compare again.</li>
+      </ol>
+      <h3 id="analysis-flags">The flags</h3>
+      <div class="table-wrap"><table>
+        <tr><th>Flag</th><th>Applies to</th><th>Meaning</th></tr>
+        <tr><td>Missing URL</td><td>Document</td><td>The URL cell is empty (or holds a placeholder such as N/A or nan).</td></tr>
+        <tr><td>Missing Spider Template</td><td>Document</td><td>The Spider Template cell is empty.</td></tr>
+        <tr><td>Missing Domain</td><td>Document</td><td>There is no domain and none can be worked out from the URL.</td></tr>
+        <tr><td>No Base Template</td><td>Document</td><td>The document's domain is not in the Cached Domain of any Base Template. This is the "missing cached domain / base template" check.</td></tr>
+        <tr><td>Matched ignoring www</td><td>Document</td><td>Information only: the domain matched a Base Template only after ignoring <code>www.</code>. Check the spelling in one of the two places.</td></tr>
+        <tr><td>No Cached Domain</td><td>Base Template</td><td>The Base Template has no usable domain, so it can never be joined to anything.</td></tr>
+        <tr><td>No documents in dataset</td><td>Base Template</td><td>Information only: nothing in the uploaded file uses this Base Template's domain.</td></tr>
+      </table></div>
+      <p>A document is <b>Needs fix</b> when it has any of the first four flags, <b>Check</b> when it has only the information flag, and <b>OK</b> when it has none.</p>
+      <h3 id="analysis-report">The Excel report</h3>
+      <p><b>Download full report</b>, <b>Download rows needing fix</b> or <b>Download current filter</b> give one workbook with: <b>SUMMARY</b> (counts, columns used and what each flag means), <b>Review</b> (every document with Status, a readable Flags column and one red YES column per flag, plus the Base Template(s) it was joined to), <b>Needs Fix</b> (only the rows to fix), <b>Domains</b> and <b>Base Templates Review</b>. The <b>Source Row</b> column is the row number in your original file, so each problem is easy to find. The report is not saved on the server - download it while the page is open (results are kept for two hours).</p>
+    </section>
+
+    <!-- ───────────────────────── 6 ───────────────────────── -->
+    <section id="glossary">
+      <h2>6. Reading the results</h2>
+      <h3>Status</h3>
+      <div class="table-wrap"><table>
+        <tr><th>Value</th><th>Meaning</th></tr>
+        <tr><td><span class="pill ok">WORKING</span></td><td>The address answered successfully (after any redirects).</td></tr>
+        <tr><td><span class="pill bad">NOT_WORKING</span></td><td>Page not found (404, 410) or a server error (500, 502, 503, 504...).</td></tr>
+        <tr><td><span class="pill warn">BLOCKED</span></td><td>The site refused the request: 401 (login needed), 403 (access denied) or 429 (too many requests). The page may still open in a normal browser.</td></tr>
+        <tr><td><span class="pill warn">TIMEOUT</span></td><td>The site did not answer in time.</td></tr>
+        <tr><td><span class="pill bad">ERROR</span></td><td>The address could not be reached or is invalid: unknown host (DNS), connection or certificate problem, not a web address, or a private/local address (these are blocked on purpose).</td></tr>
+      </table></div>
+      <h3>URL Type and Document Link Type</h3>
+      <div class="table-wrap"><table>
+        <tr><th>URL Type</th><th>Meaning</th></tr>
+        <tr><td>DIRECT_PDF / DIRECT_DOCUMENT</td><td>The address itself is a PDF, or a DOC/DOCX file.</td></tr>
+        <tr><td>LANDING_PAGE</td><td>A normal web page; see Document Link Type for what it contains.</td></tr>
+        <tr><td>NOT_WORKING</td><td>The address did not work (see Status and Error).</td></tr>
+        <tr><td>UNKNOWN</td><td>It works but is neither a web page nor a document (for example an image).</td></tr>
+      </table></div>
+      <div class="table-wrap"><table>
+        <tr><th>Document Link Type</th><th>Meaning</th></tr>
+        <tr><td>DIRECT</td><td>The address is the document.</td></tr>
+        <tr><td>SINGLE</td><td>The page links to exactly one document, which was analysed.</td></tr>
+        <tr><td>MULTIPLE</td><td>Several documents - count shown, none chosen.</td></tr>
+        <tr><td>NONE</td><td>The page has no document link.</td></tr>
+      </table></div>
+      <h3>Analysis Status, pages and dates</h3>
+      <div class="table-wrap"><table>
+        <tr><th>Value</th><th>Meaning</th></tr>
+        <tr><td><span class="pill ok">Success</span></td><td>The URL was analysed completely.</td></tr>
+        <tr><td><span class="pill warn">Unknown</span></td><td>The URL works but some details could not be read - for example a protected or damaged PDF, a PDF over 50 MB (not downloaded), or a linked document that failed. The Error column says why.</td></tr>
+        <tr><td><span class="pill bad">Failed</span></td><td>The URL did not work. The Error column says why, e.g. <code>HTTP 404 - Not found</code> or <code>Timeout after 30 seconds</code>.</td></tr>
+        <tr><td>Page Count</td><td>A number, <code>Unknown</code> (document could not be read) or <code>N/A</code> (not a document).</td></tr>
+        <tr><td>Language</td><td>From the document text. <code>Unknown</code> when there is not enough text (scanned PDFs); <code>N/A</code> for web pages.</td></tr>
+        <tr><td>Last Modified</td><td>Only a real date from the web server or the PDF - never guessed. <code>Unknown</code> otherwise.</td></tr>
+        <tr><td>Header Content-Type</td><td>The raw <code>Content-Type</code> the server sent for the address, for example <code>text/html</code>, <code>application/pdf</code> or <code>image/gif</code>. It is shown for every URL that answered (even error pages), can be filtered, and is exported. <i>Content Type</i> is the simplified category (PDF, DOC, DOCX, HTML, Other) worked out from it.</td></tr>
+        <tr><td>HTTP Status</td><td>What the address itself answered first (for example 301 for a redirect). Final Status and Final URL are in the Excel file.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- ───────────────────────── 7 ───────────────────────── -->
+    <section id="cli">
+      <h2>7. Command line</h2>
+      <p>The same engine can be run without the web page.</p>
+      <h3>Analyse the URLs in an Excel file</h3>
+<pre><code>.\run.bat --input books.xlsx
+.\run.bat --input books.xlsx --url-column "Source Link" --id-column "Document ID" --title-column "Book Title"
+.\run.bat --input books.xlsx --fresh          # ignore cached results</code></pre>
+      <p>The result is written to an <code>output</code> folder next to the input file (<code>&lt;name&gt;_analyzed.xlsx</code>); the input file is never changed.</p>
+      <h3>Build the daily backlog workbook</h3>
+<pre><code>.\run.bat daily-workflow --ui "StartPointStatus-01-Oct-2026.csv" --powerbi "Details Table.xlsx"</code></pre>
+    </section>
+
+    <!-- ───────────────────────── 8 ───────────────────────── -->
+    <section id="settings">
+      <h2>8. Settings</h2>
+      <p>Edit <code>config.yaml</code> in the project folder, then restart the tool.</p>
+      <div class="table-wrap"><table>
+        <tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
+        <tr><td>request.timeout</td><td>30</td><td>Seconds to wait for a website.</td></tr>
+        <tr><td>request.retries</td><td>3</td><td>Extra attempts after a temporary failure.</td></tr>
+        <tr><td>request.delay</td><td>0.5</td><td>Minimum seconds between requests to the same website (also the base for the retry delay).</td></tr>
+        <tr><td>request.user_agent</td><td>browser-like</td><td>Identifies the tool to websites; some block unknown agents.</td></tr>
+        <tr><td>processing.workers</td><td>5</td><td>How many URLs are checked at once (at most 2 per website).</td></tr>
+        <tr><td>processing.max_pdf_bytes</td><td>50 MB</td><td>Larger documents are not downloaded (page count and language are then Unknown).</td></tr>
+        <tr><td>browser.enabled</td><td>false</td><td>Turn on to render pages in a browser when links are created by JavaScript. Needs <code>pip install playwright</code> and <code>playwright install chromium</code>. Slower, so off by default.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- ───────────────────────── 9 ───────────────────────── -->
+    <section id="trouble">
+      <h2>9. Troubleshooting</h2>
+      <div class="table-wrap"><table>
+        <tr><th>What you see</th><th>What to do</th></tr>
+        <tr><td>Red LOW MATCH box; Book Type list is short (e.g. only PDF and Unmatched)</td><td>The CSV is a partial export or from another day. Upload the full <code>StartPointStatus</code> file for the same day as the Power BI file.</td></tr>
+        <tr><td>Book Types differ from what you expected</td><td>Book Type is the <code>BookCategory</code> from the CSV. Blank values show as <b>Unknown</b>; books missing from the CSV show as <b>Unmatched</b>. Neither is in the action lists.</td></tr>
+        <tr><td>The Excel report button stays grey</td><td>It takes about a minute for a large CSV. If a message appears instead, read it - for example a file open in Excel must be closed first.</td></tr>
+        <tr><td>Many URLs are BLOCKED (403/401/429)</td><td>The website refuses automated requests; the address may still work in a browser. Try again later or with fewer URLs at once. This is a limit of the website, not of the tool.</td></tr>
+        <tr><td>Status <b>BLOCKED</b> with "Blocked by bot protection (Radware / Cloudflare...)"</td><td>The site answered with a "verify you are a browser" page instead of the real page (the HTTP status can still be 200). The tool cannot see the page's links, so it deliberately does <b>not</b> say "No Document Link" - the Document Link Type is left empty. Open the page in a normal browser to check it. <b>Best fix: click "Paste page source" on that row</b> (or use the Page Source tab) and paste the page's HTML copied from your own browser. Alternatively try <code>browser.enabled: true</code> in <code>config.yaml</code> (optional Playwright fallback) - it works on some sites but not all, and the tool does not try to defeat captchas. For sites you maintain or rely on regularly, ask the site owner to allow-list the tool.</td></tr>
+        <tr><td>HTTP 202 and the note "bot-protection page"</td><td>The site returned a holding page instead of the real content. Open the address in a browser to confirm.</td></tr>
+        <tr><td>A result looks out of date and is marked "cached"</td><td>Results are reused for one hour. Click <b>Re-analyze</b> for a live check.</td></tr>
+        <tr><td>"Document is larger than 50 MB"</td><td>The file was not downloaded. Raise <code>processing.max_pdf_bytes</code> if you need page counts for big files.</td></tr>
+        <tr><td>Excel upload says it could not find the URL column</td><td>Pick it from the <b>Select URL Column</b> list. Make sure the column really contains web addresses.</td></tr>
+        <tr><td>The page does not load, or shows old behaviour after an update</td><td>Make sure only one copy is running (close other terminal windows that ran <code>run_dashboard.bat</code>), then start it again. If port 8080 is busy, set <code>PORT</code> to another number.</td></tr>
+        <tr><td>"The report is no longer available"</td><td>The tool was restarted, which clears the dashboard. Upload the files again.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- ───────────────────────── 10 ───────────────────────── -->
+    <section id="privacy">
+      <h2>10. Data and safety</h2>
+      <ul>
+        <li>Everything runs on your computer. Your files are not sent anywhere except that URL Analysis contacts the websites you ask it to check.</li>
+        <li>Uploaded files and generated reports are kept in the <code>uploads</code> and <code>output</code> folders inside the project, and the Base Templates table in <code>data</code>. They contain business data, so delete old ones when you are done. They are excluded from git.</li>
+        <li>Only <code>http</code> and <code>https</code> addresses are checked. Private, local and internal network addresses are refused, including when a website redirects to one.</li>
+        <li>Downloaded documents are read in memory as data only - they are never opened or run - and are not kept.</li>
+        <li>Pasted or uploaded text that starts with <code>=</code> is stored as plain text in the Excel files, so it cannot run as a formula.</li>
+      </ul>
+    </section>
+  </main>
+</div>
+</body>
+</html>

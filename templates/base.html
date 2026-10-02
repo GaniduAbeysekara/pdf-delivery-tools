@@ -41,6 +41,8 @@
     <a class="nav {{ 'on' if p == '/' }}" href="/">Home</a>
     <a class="nav {{ 'on' if p.startswith('/backlog') }}" href="/backlog">Daily Backlog Dashboard</a>
     <a class="nav {{ 'on' if p.startswith('/url-analysis') }}" href="/url-analysis">URL Analysis</a>
+    <a class="nav {{ 'on' if p == '/base-templates' }}" href="/base-templates">Base Templates</a>
+    <a class="nav {{ 'on' if p.startswith('/base-template-analysis') }}" href="/base-template-analysis">Base Template Analysis</a>
   </aside>
   <main class="main">
 {% block content %}{% endblock %}

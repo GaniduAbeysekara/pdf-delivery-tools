@@ -35,10 +35,17 @@ def parse_http_date(raw: str) -> str:
         return ""
 
 
-def detect_content_type(mime: str, url: str, head: bytes) -> str:
-    """PDF / DOC / DOCX / HTML / Other, from the server's MIME type first, then the file signature."""
+def disposition_filename(disposition: str) -> str:
+    """File name from a Content-Disposition header (`attachment; filename="report.pdf"`), or ''."""
+    m = re.search(r"filename\*?=(?:[^'\";]*'')?\"?([^\";]+)\"?", disposition or "", re.I)
+    return m.group(1).strip() if m else ""
+
+
+def detect_content_type(mime: str, url: str, head: bytes, filename: str = "") -> str:
+    """PDF / DOC / DOCX / HTML / Other, from the server's MIME type first, then the file signature
+    (and the download file name, for servers that send a generic type)."""
     ct = (mime or "").split(";")[0].strip().lower()
-    path = urlparse(url).path.lower()
+    path = (filename or urlparse(url).path).lower()
     ext = path.rsplit(".", 1)[-1] if "." in path else ""
     if "pdf" in ct:
         return "PDF"
@@ -53,6 +60,8 @@ def detect_content_type(mime: str, url: str, head: bytes) -> str:
     if head.startswith(b"%PDF") and (generic or ct.startswith("text/plain")):
         return "PDF"
     if generic:
+        if filename and ext == "pdf":          # the server names the download "*.pdf": read it as a PDF (and report it if invalid)
+            return "PDF"
         if head.startswith(b"PK\x03\x04") and ext == "docx":
             return "DOCX"
         if head.startswith(b"\xd0\xcf\x11\xe0") and ext == "doc":

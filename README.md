@@ -246,6 +246,8 @@ un_dashboard.bat        # then open http://localhost:8080  (binds to 127.0.0.1; 
 | **Home** (`/`) | Choose a tool. The sidebar is on every page. |
 | **Daily Backlog Dashboard** (`/backlog`) | Upload the Reg Transform UI CSV + Power BI Excel, explore the backlog, select books, download the filtered CSV or the 7-tab Excel report. |
 | **URL Analysis** (`/url-analysis`) | One tool, three inputs: **Paste URLs**, **Excel Batch Upload**, **From Daily Backlog**. |
+| **Base Templates** (`/base-templates`) | The team's *Base Template* sheet: search / filter / sort, add, edit, delete, import from and export to Excel. Stored in `data/base_templates.json` (git-ignored). Import "add only new rows" is repeatable, so rows added to the SharePoint sheet can be pulled in. |
+| **Base Template Analysis** (`/base-template-analysis`) | Upload a URL analysis file (Document ID, Domain, Spider Template, URL) and compare it with the Base Templates, joined on domain. Flags missing URLs, missing Spider Templates, missing domains and domains with no Base Template; Excel report with Review / Needs Fix / Domains / Base Templates Review / SUMMARY sheets. The URL Analysis page has a **Send to Base Template Analysis** button (selected rows, or all) that hands its results over, already compared. |
 
 ### One URL analysis engine
 

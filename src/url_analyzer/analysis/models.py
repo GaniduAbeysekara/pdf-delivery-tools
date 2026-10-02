@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 SOURCE_MANUAL = "Manual URL Input"
 SOURCE_EXCEL = "Excel Batch Upload"
 SOURCE_BACKLOG = "Daily Backlog"
+SOURCE_PAGE = "Pasted Page Source"
 
 
 @dataclass
@@ -18,7 +19,10 @@ class BookRecord:
     domain: str = ""
     api_result: str = ""
     book_type: str = ""
+    code: str = ""                  # Reg Transform Code of the book
+    spidering_template: str = ""    # Reg Transform SpideringTemplate of the book
     extra: dict = field(default_factory=dict)   # preserved source columns (e.g. from an uploaded Excel)
+    page_html: str = ""             # HTML of the page supplied by the user (page is then NOT requested); never exported
 
     @classmethod
     def from_dict(cls, d: dict) -> "BookRecord":
@@ -27,6 +31,8 @@ class BookRecord:
             url=str(d.get("url") or "").strip(), document_id=str(d.get("document_id") or "").strip(),
             book_title=str(title).strip(), domain=str(d.get("domain") or "").strip(),
             api_result=str(d.get("api_result") or "").strip(), book_type=str(d.get("book_type") or "").strip(),
+            code=str(d.get("code") or "").strip(),
+            spidering_template=str(d.get("spidering_template") or d.get("SpideringTemplate") or "").strip(),
             extra={str(k): str(v) for k, v in (d.get("extra") or {}).items()},
         )
 
@@ -40,6 +46,8 @@ class URLAnalysisResult:
     domain: str = ""
     api_result: str = ""
     book_type: str = ""
+    code: str = ""
+    spidering_template: str = ""
     extra: dict = field(default_factory=dict)
     http_status: int | None = None        # status of the URL itself (first response, e.g. 301)
     final_status: int | None = None       # status after following redirects
@@ -72,6 +80,7 @@ class URLAnalysisResult:
         copy.url = rec.url or self.url
         copy.document_id, copy.book_title, copy.api_result = rec.document_id, rec.book_title, rec.api_result
         copy.book_type, copy.extra = rec.book_type, dict(rec.extra)
+        copy.code, copy.spidering_template = rec.code, rec.spidering_template
         if rec.domain:
             copy.domain = rec.domain
         return copy

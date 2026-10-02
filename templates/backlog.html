@@ -135,6 +135,8 @@
       <div class="sec">Filters</div>
       <div class="fgrid" id="fgrid"></div>
       <div class="frow">
+        <div style="min-width:160px"><label class="fl" for="code-q">Code</label><input class="fin" id="code-q" type="search" placeholder="Search Code..." /></div>
+        <div style="min-width:190px"><label class="fl" for="tpl-q">Spidering Template</label><input class="fin" id="tpl-q" type="search" placeholder="Search template..." /></div>
         <div class="grow"><label class="fl" for="q">Search</label><input class="fin" id="q" type="search" placeholder="Search books (ID, title, domain, link, API Result)..." /></div>
         <div id="datebox" style="display:none;gap:.5rem;align-items:end">
           <div><label class="fl" id="date-label" for="d-from">Date from</label><input class="fin" type="date" id="d-from" /></div>
@@ -282,9 +284,9 @@ document.addEventListener('click', () => document.querySelectorAll('.ms.open').f
 
 /* ---------- dashboard ---------- */
 function initDash(rid, meta, restore) {
-  S = {rid, meta, sel:{}, pending:{}, q:'', dFrom:'', dTo:'', view:'overview', page:1, size:50, sort:'', dir:'asc', cols:[...meta.columns.default], selected:new Set()};
+  S = {rid, meta, sel:{}, pending:{}, q:'', code:'', tpl:'', dFrom:'', dTo:'', view:'overview', page:1, size:50, sort:'', dir:'asc', cols:[...meta.columns.default], selected:new Set()};
   if (restore) {
-    Object.assign(S, {sel: restore.sel || {}, q: restore.q || '', dFrom: restore.dFrom || '', dTo: restore.dTo || '', view: restore.view || 'overview',
+    Object.assign(S, {sel: restore.sel || {}, q: restore.q || '', code: restore.code || '', tpl: restore.tpl || '', dFrom: restore.dFrom || '', dTo: restore.dTo || '', view: restore.view || 'overview',
       page: restore.page || 1, size: restore.size || 50, sort: restore.sort || '', dir: restore.dir || 'asc', selected: new Set(restore.selected || [])});
     S.pending = JSON.parse(JSON.stringify(S.sel));
     const ok = (restore.cols || []).filter(c => meta.columns.all.includes(c)); if (ok.length) S.cols = ok;
@@ -307,7 +309,7 @@ function initDash(rid, meta, restore) {
   for (const [label, opts] of Object.entries(meta.options.extra)) add('f_' + label, label, opts, 'All ' + label);
   const hasDate = !!meta.options.date_min; $('datebox').style.display = hasDate ? 'flex' : 'none';
   $('date-label').textContent = hasDate ? meta.options.date_label + ' from' : '';
-  $('d-from').value = S.dFrom; $('d-to').value = S.dTo; $('q').value = S.q;
+  $('d-from').value = S.dFrom; $('d-to').value = S.dTo; $('q').value = S.q; $('code-q').value = S.code; $('tpl-q').value = S.tpl;
   colSelector();
   $('dash').style.display = 'block';
   refresh();
@@ -323,6 +325,7 @@ function colSelector() {
 function params(forDownload) {
   const p = new URLSearchParams();
   for (const [k, vs] of Object.entries(S.sel)) vs.forEach(v => p.append(k, v));
+  if (S.code) p.set('code', S.code); if (S.tpl) p.set('template', S.tpl);
   if (S.q) p.set('q', S.q); if (S.dFrom) p.set('date_from', S.dFrom); if (S.dTo) p.set('date_to', S.dTo);
   p.set('view', S.view);
   if (!forDownload) { p.set('page', S.page); p.set('size', S.size); if (S.sort) { p.set('sort', S.sort); p.set('dir', S.dir); } S.cols.forEach(c => p.append('col', c)); }
@@ -336,14 +339,15 @@ async function refresh() {
   render(d);
   saveState();
 }
-function applyPending() { S.sel = {}; for (const [k, v] of Object.entries(S.pending)) if (v.length) S.sel[k] = [...v]; S.q = $('q').value.trim(); S.dFrom = $('d-from').value; S.dTo = $('d-to').value; S.page = 1; refresh(); }
+function applyPending() { S.sel = {}; for (const [k, v] of Object.entries(S.pending)) if (v.length) S.sel[k] = [...v]; S.q = $('q').value.trim(); S.code = $('code-q').value.trim(); S.tpl = $('tpl-q').value.trim(); S.dFrom = $('d-from').value; S.dTo = $('d-to').value; S.page = 1; refresh(); }
 function syncMultis() { Object.values(multis).forEach(m => m.paint()); }
-function clearFilters() { S.sel = {}; S.pending = {}; S.q = ''; S.dFrom = S.dTo = ''; $('q').value = $('d-from').value = $('d-to').value = ''; S.page = 1; syncMultis(); }
+function clearFilters() { S.sel = {}; S.pending = {}; S.q = ''; S.code = S.tpl = ''; $('code-q').value = $('tpl-q').value = ''; S.dFrom = S.dTo = ''; $('q').value = $('d-from').value = $('d-to').value = ''; S.page = 1; syncMultis(); }
 function setFilter(key, value) { S.sel[key] = [value]; S.pending[key] = [value]; S.page = 1; syncMultis(); refresh(); }
 $('apply').onclick = applyPending;
 $('clear').onclick = () => { clearFilters(); refresh(); };
 $('reset').onclick = () => { clearFilters(); S.selected.clear(); selMsg = ''; S.view = 'overview'; S.sort = ''; S.dir = 'asc'; S.size = 50; S.cols = [...S.meta.columns.default]; colSelector(); refresh(); };
-$('q').oninput = () => { clearTimeout(debounce); debounce = setTimeout(() => { S.q = $('q').value.trim(); S.page = 1; refresh(); }, 350); };
+$('q').oninput = $('code-q').oninput = $('tpl-q').oninput = () => { clearTimeout(debounce); debounce = setTimeout(() => {
+  S.q = $('q').value.trim(); S.code = $('code-q').value.trim(); S.tpl = $('tpl-q').value.trim(); S.page = 1; refresh(); }, 350); };
 $('q').onkeydown = e => { if (e.key === 'Enter') { clearTimeout(debounce); applyPending(); } };
 
 /* ---------- render ---------- */
@@ -365,6 +369,8 @@ function render(d) {
   const chips = [];
   const labels = {domain:'Domain', api:'API Result', book_type:'Book Type'};
   for (const [k, vs] of Object.entries(S.sel)) vs.forEach(v => chips.push([labels[k] || k.slice(2), v, () => { S.sel[k] = S.sel[k].filter(x => x !== v); S.pending[k] = [...S.sel[k]]; if (!S.sel[k].length) delete S.sel[k]; syncMultis(); S.page = 1; refresh(); }]));
+  if (S.code) chips.push(['Code', S.code, () => { S.code = ''; $('code-q').value = ''; refresh(); }]);
+  if (S.tpl) chips.push(['Spidering Template', S.tpl, () => { S.tpl = ''; $('tpl-q').value = ''; refresh(); }]);
   if (S.q) chips.push(['Search', S.q, () => { S.q = ''; $('q').value = ''; refresh(); }]);
   if (S.dFrom || S.dTo) chips.push(['Date', (S.dFrom || '...') + ' to ' + (S.dTo || '...'), () => { S.dFrom = S.dTo = ''; $('d-from').value = $('d-to').value = ''; refresh(); }]);
   const ch = $('chips'); ch.innerHTML = chips.length ? chips.map((c, i) => `<span class="chip">${esc(c[0])}: ${esc(c[1])} <button data-i="${i}" aria-label="Remove filter">&times;</button></span>`).join('') + '<button class="btn ghost" id="clr2" style="padding:.15rem .7rem">Clear All Filters</button>' : '<span style="color:var(--gray);font-size:.8rem">No active filters</span>';
@@ -467,7 +473,7 @@ $('dl-selected').onclick = async () => {
 function saveState() {
   if (!S) return;
   try {
-    sessionStorage.setItem('backlogState', JSON.stringify({rid: S.rid, sel: S.sel, q: S.q, dFrom: S.dFrom, dTo: S.dTo, view: S.view,
+    sessionStorage.setItem('backlogState', JSON.stringify({rid: S.rid, sel: S.sel, q: S.q, code: S.code, tpl: S.tpl, dFrom: S.dFrom, dTo: S.dTo, view: S.view,
       page: S.page, size: S.size, sort: S.sort, dir: S.dir, cols: S.cols, selected: [...S.selected]}));
   } catch (e) { /* storage unavailable: state just won't survive navigation */ }
 }

@@ -291,7 +291,7 @@ def test_workbook_has_seven_valid_tabs(data, tmp_path):
                              "EVC Open Task", "External Verified Change", "Stream 2 - Dev Attn Needed"]
     assert all(len(n) <= 31 for n in wb.sheetnames)
     export_hdr = [c.value for c in wb["Export"][1]]
-    assert export_hdr[-2:] == ["Book Type", "Domain"] and not any(str(h).startswith("_") for h in export_hdr)
+    assert export_hdr[-4:] == ["Book Type", "Domain", "Code", "SpideringTemplate"] and not any(str(h).startswith("_") for h in export_hdr)
     assert wb["Export"].max_row == len(ROWS) + 1
     assert wb["Change and Potential Change"].max_row - 1 == 4
     assert wb["Stream 2 - Dev Attn Needed"].max_row - 1 == 3

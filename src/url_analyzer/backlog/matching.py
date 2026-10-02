@@ -17,7 +17,7 @@ import pandas as pd
 from ..logger import log
 from . import config as C
 from .loader import BacklogError, find_col
-from .normalize import key_stem, last_segment, normalize_book_type, normalize_key
+from .normalize import is_blank, key_stem, last_segment, normalize_book_type, normalize_key
 
 
 @dataclass
@@ -38,6 +38,10 @@ class MatchResult:
     blank_category: int = 0       # matched rows whose UI BookCategory is blank -> Unknown
     empty_pbi_keys: int = 0
     ui_urls: pd.Series | None = None   # UI Url per Power BI row (fallback for domains)
+    ui_code: pd.Series | None = None       # UI Code of the matched record ('' when unmatched / blank)
+    ui_template: pd.Series | None = None   # UI SpideringTemplate of the matched record
+    code_column: str | None = None         # the UI column used (None when the CSV lacks it)
+    template_column: str | None = None
 
     @property
     def book_type_raw(self) -> pd.Series:      # kept for callers that only need the decided value
@@ -92,6 +96,13 @@ def _choose_keys(ui: pd.DataFrame, pbi: pd.DataFrame) -> tuple[pd.Series, pd.Ser
     return ui_keys[best[1]], pbi_keys[best[2]], best[1], best[2], "auto-detected"
 
 
+def _carry(pk: pd.Series, lookup: pd.DataFrame, name: str, col: str | None, matched: pd.Series) -> pd.Series:
+    """A UI column mapped onto the Power BI rows through the same key; '' for unmatched rows / missing column."""
+    if not col:
+        return pd.Series("", index=pk.index, dtype=object)
+    return pk.map(lookup[name]).where(matched, "").fillna("").astype(object)
+
+
 def match_book_types(ui: pd.DataFrame, pbi: pd.DataFrame) -> MatchResult:
     bt_col = find_col(ui, C.UI_BOOK_TYPE_COLS)
     if bt_col is None:
@@ -117,6 +128,10 @@ def match_book_types(ui: pd.DataFrame, pbi: pd.DataFrame) -> MatchResult:
     url_col = find_col(ui, C.UI_URL_COLS)
     if url_col:
         lookup["url"] = ui[url_col]
+    code_col, tpl_col = find_col(ui, C.UI_CODE_COLS), find_col(ui, C.UI_TEMPLATE_COLS)
+    for name, col in (("code", code_col), ("tpl", tpl_col)):
+        if col:
+            lookup[name] = ui[col].map(lambda v: "" if is_blank(v) else str(v).strip())
     lookup = lookup.dropna(subset=["k"]).drop_duplicates("k", keep="first").set_index("k")
 
     matched = pk.isin(lookup.index).astype(bool)
@@ -131,6 +146,8 @@ def match_book_types(ui: pd.DataFrame, pbi: pd.DataFrame) -> MatchResult:
         conflicting_duplicates=dup_conflicts, duplicate_pbi_keys=int((pbi_dups > 1).sum()),
         duplicate_samples=dup_samples, blank_category=int((final == C.BT_UNKNOWN).sum()),
         empty_pbi_keys=int(pk.isna().sum()), ui_urls=pk.map(lookup["url"]) if url_col else None,
+        ui_code=_carry(pk, lookup, "code", code_col, matched), ui_template=_carry(pk, lookup, "tpl", tpl_col, matched),
+        code_column=code_col, template_column=tpl_col,
     )
     log.info("PBI records: %d | UI records: %d | BookCategory matched: %d | Unmatched: %d | "
              "Duplicate UI identifiers: %d | blank BookCategory (Unknown): %d (key %s <-> %s, %s)",
