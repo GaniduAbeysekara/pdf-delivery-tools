@@ -14,6 +14,7 @@
   }
   body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
   a { color:var(--accent); }
+  [hidden] { display:none !important; }   /* author styles such as .btn { display:inline-block } must not override the hidden attribute */
   .app { display:flex; min-height:100vh; }
   .side { width:236px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border);
           padding:1.2rem .9rem; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:.2rem; }

@@ -182,7 +182,7 @@ def test_report_sheets_flags_and_subset():
     assert [c.value for c in wb["Needs Fix"]["B"]][1:] == ["D2"]
     only = load_workbook(io.BytesIO(build_report(res, [res.rows[0]])))
     assert [c.value for c in only["Review"]["B"]][1:] == ["D1"]
-    assert any("Needs fix" == c.value for c in wb["SUMMARY"]["A"])
+    assert any("Needs fix (books)" == c.value for c in wb["SUMMARY"]["A"])
 
 
 def test_report_guards_formula_injection():

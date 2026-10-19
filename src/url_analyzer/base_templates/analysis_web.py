@@ -122,10 +122,13 @@ def create_analysis_blueprint(upload_dir: str | Path, store: BaseTemplateStore) 
         frame = pd.DataFrame({"DocID": [r.get("document_id", "") for r in recs], "Domain": [r.get("domain", "") for r in recs],
                               "SpiderTemplate": [r.get("spidering_template", "") for r in recs], "URL": [r.get("url", "") for r in recs]}, dtype=object)
         mapping = {"document_id": "DocID", "domain": "Domain", "spidering_template": "SpiderTemplate", "url": "URL"}
-        name = (payload.get("source") or {}).get("name") or "URL Analysis results"
+        src = payload.get("source") or {}
+        backlog = src.get("tool") == "backlog"
+        name = src.get("name") or ("Daily Backlog" if backlog else "URL Analysis results")
         try:
             comparison = cmp.compare(frame, mapping, store.matching(), [int(r.get("row", i + 1)) for i, r in enumerate(recs)],
-                                     {"filename": f"{name} (from URL Analysis)", "sheet": "URL Analysis results"})
+                                     {"filename": f"{name} (from {'the Daily Backlog Dashboard' if backlog else 'URL Analysis'})",
+                                      "sheet": "Daily Backlog books" if backlog else "URL Analysis results"})
         except cmp.CompareError as e:
             return jsonify({"error": str(e)}), 400
         prune()
@@ -150,43 +153,88 @@ def create_analysis_blueprint(upload_dir: str | Path, store: BaseTemplateStore) 
         page = min(page, pages)
         return {"items": items[(page - 1) * size: page * size], "matched": len(items), "page": page, "pages": pages}
 
+    def matching(c, a):
+        """Items of the requested view that match the search / filters in the query string."""
+        view = a.get("view", "rows")
+        if view == "domains":
+            return view, cmp.filter_domains(c.domains, a.get("q", ""), a.get("status", ""))
+        if view == "base":
+            q = a.get("q", "").lower()
+            return view, [b for b in c.base if (not q or q in (b["cached_domain"] + " " + b["template"]).lower())
+                          and (not a.get("flag") or a["flag"] in b["flags"])]
+        return "rows", cmp.filter_rows(c.rows, a.get("flag", ""), a.get("status", ""), a.get("q", ""), a.get("domain", ""))
+
+    def books_of_domains(c, names) -> list[dict]:
+        """Every book of the given domains ('(none)' = books without a domain), in file order."""
+        wanted = {"" if n == "(none)" else n for n in names}
+        return [r for r in c.rows if r["domain"] in wanted]
+
     @bp.route("/api/bta/<rid>/rows")
     def rows(rid):
         c = get_result(rid)
         if c is None:
             return jsonify({"error": "This report is no longer available - run the analysis again"}), 404
-        a = request.args
-        view = a.get("view", "rows")
         try:
-            if view == "domains":
-                q = a.get("q", "").lower()
-                items = [d for d in c.domains if (not q or q in d["domain"].lower() or any(q in t.lower() for t in d["base_templates"]))
-                         and (not a.get("status") or d["status"] == a["status"])]
-            elif view == "base":
-                q = a.get("q", "").lower()
-                items = [b for b in c.base if (not q or q in (b["cached_domain"] + " " + b["template"]).lower())
-                         and (not a.get("flag") or a["flag"] in b["flags"])]
-            else:
-                items = cmp.filter_rows(c.rows, a.get("flag", ""), a.get("status", ""), a.get("q", ""), a.get("domain", ""))
-            out = paged(items, a)
+            _, items = matching(c, request.args)
+            out = paged(items, request.args)
         except cmp.CompareError as e:
             return jsonify({"error": str(e)}), 400
         return jsonify({**out, "summary": c.summary})
 
+    @bp.route("/api/bta/<rid>/ids")
+    def ids(rid):
+        """Every row index (Documents view) or domain name (Domains view) matching the filters - for 'Select all filtered'."""
+        c = get_result(rid)
+        if c is None:
+            return jsonify({"error": "This report is no longer available - run the analysis again"}), 404
+        view, items = matching(c, request.args)
+        if view == "base":
+            return jsonify({"error": "Base Templates cannot be selected"}), 400
+        key = "idx" if view == "rows" else "domain"
+        return jsonify({"ids": [i[key] for i in items], "view": view,
+                        "books": len(items) if view == "rows" else sum(d["rows"] for d in items)})
+
+    def send_report(rid, c, subset, label):
+        base = Path(results[rid]["name"]).stem[:60]
+        return send_file(io.BytesIO(build_report(c, subset, label)), as_attachment=True,
+                         download_name=f"Base_Template_Analysis_{base}_{time.strftime('%Y%m%d')}.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     @bp.route("/api/bta/<rid>/download")
     def download(rid):
+        """All data (default), the rows needing a fix, or whatever the current search / filters show."""
         c = get_result(rid)
         if c is None:
             return jsonify({"error": "This report is no longer available - run the analysis again"}), 404
         a = request.args
-        subset = None
+        subset, label = None, "All books"
         if a.get("scope") == "filtered":
-            subset = cmp.filter_rows(c.rows, a.get("flag", ""), a.get("status", ""), a.get("q", ""), a.get("domain", ""))
+            view, items = matching(c, a)
+            subset = items if view == "rows" else books_of_domains(c, [d["domain"] for d in items]) if view == "domains" else None
+            label = "Current filter"
         elif a.get("scope") == "fix":
-            subset = [r for r in c.rows if r["status"] == "Needs fix"]
-        base = Path(results[rid]["name"]).stem[:60]
-        return send_file(io.BytesIO(build_report(c, subset)), as_attachment=True,
-                         download_name=f"Base_Template_Analysis_{base}_{time.strftime('%Y%m%d')}.xlsx",
-                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            subset, label = [r for r in c.rows if r["status"] == "Needs fix"], "Books needing a fix"
+        return send_report(rid, c, subset, label)
+
+    @bp.route("/api/bta/<rid>/download-selected", methods=["POST"])
+    def download_selected(rid):
+        """Only the ticked books ({"rows": [row index...]}) and/or all books of the ticked domains ({"domains": [...]})."""
+        if (bad := guarded()):
+            return bad
+        c = get_result(rid)
+        if c is None:
+            return jsonify({"error": "This report is no longer available - run the analysis again"}), 404
+        body = request.get_json(silent=True) or {}
+        picked, doms = body.get("rows") or [], body.get("domains") or []
+        if not isinstance(picked, list) or not isinstance(doms, list) or not all(isinstance(i, int) for i in picked) \
+                or not all(isinstance(n, str) for n in doms):
+            return jsonify({"error": "Invalid selection."}), 400
+        want = set(picked)
+        in_domains = {r["idx"] for r in books_of_domains(c, doms)} if doms else set()
+        subset = [r for r in c.rows if r["idx"] in want or r["idx"] in in_domains]
+        if not subset:
+            return jsonify({"error": "Select at least one book or domain first."}), 400
+        label = ("Selected domains" if doms and not picked else "Selected books" if picked and not doms else "Selected books and domains")
+        return send_report(rid, c, subset, label)
 
     return bp

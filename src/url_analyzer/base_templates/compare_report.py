@@ -9,7 +9,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
-from .compare import BASE_FLAGS, FLAGS, Comparison
+from .compare import BASE_FLAGS, FLAGS, Comparison, subset_comparison
 from .excel import _safe
 
 RED, AMBER, GREEN = (PatternFill("solid", fgColor=c) for c in ("F8CBAD", "FFE699", "C6E0B4"))
@@ -58,10 +58,15 @@ def _row_headers() -> list[str]:
 ROW_WIDTHS = [11, 40, 30, 38, 60, 12, 46, 13, 22, 14, 18, 14, 50, 12]
 
 
-def build_report(cmp: Comparison, rows: list[dict] | None = None) -> bytes:
-    """`rows` limits the Review sheet to a subset (e.g. the current filter); the other sheets always describe the whole run."""
-    shown = cmp.rows if rows is None else rows
+def build_report(cmp: Comparison, rows: list[dict] | None = None, scope: str = "") -> bytes:
+    """The whole run, or - when `rows` is given (a selection or a filter) - only those books: every sheet
+    (Review, Needs Fix, Domains, Base Templates Review, SUMMARY) is recomputed for just those rows."""
+    whole = cmp.summary["dataset_rows"]
+    if rows is not None:
+        cmp = subset_comparison(cmp, rows)
+    shown = cmp.rows
     s = cmp.summary
+    scope = scope or ("All books" if rows is None else "Selected / filtered books")
     wb = Workbook()
     wb.remove(wb.active)
 
@@ -76,10 +81,10 @@ def build_report(cmp: Comparison, rows: list[dict] | None = None) -> bytes:
     fix = [r for r in shown if r["status"] == "Needs fix"]
     _sheet(wb, "Needs Fix", h, [_row_cells(r) for r in fix], ROW_WIDTHS, "NeedsFix", fills_for(h))
 
-    dh = ["Domain", "Documents", "Needing fix", "Missing URL", "Missing Spider Template", "Base Template Count", "Base Template(s)", "Status"]
-    _sheet(wb, "Domains", dh, [[d["domain"], d["rows"], d["needs_fix"], d["missing_url"], d["missing_template"], d["base_count"],
-                                "; ".join(d["base_templates"]), d["status"]] for d in cmp.domains],
-           [34, 11, 12, 12, 22, 18, 60, 18], "Domains", {7: STATUS_FILL})
+    dh = ["Domain", "Books", "OK", "Check", "Needs fix", "Missing URL", "Missing Spider Template", "Base Template Count", "Base Template(s)", "Status"]
+    _sheet(wb, "Domains", dh, [[d["domain"], d["rows"], d["ok"], d["check"], d["needs_fix"], d["missing_url"], d["missing_template"],
+                                d["base_count"], "; ".join(d["base_templates"]), d["status"]] for d in cmp.domains],
+           [34, 9, 9, 9, 11, 12, 22, 18, 60, 18], "Domains", {9: STATUS_FILL})
 
     bh = ["Cached Domain", "Monitoring Template", "Created Date", "Dev Name", "Documents in Dataset", "Flags", "Status"]
     brows = [[b["cached_domain"], b["template"], b["created_date"], b["dev_name"], b["documents"],
@@ -89,13 +94,16 @@ def build_report(cmp: Comparison, rows: list[dict] | None = None) -> bytes:
 
     src = s.get("source", {})
     lines = [["Base Template Analysis", ""], ["Generated", time.strftime("%Y-%m-%d %H:%M:%S")],
+             ["Scope", f"{scope} ({len(shown):,} of {whole:,} books)" if rows is not None else scope],
              ["Dataset file", src.get("filename", "")], ["Sheet", src.get("sheet", "")],
              ["Columns used", ", ".join(f"{k}: {v}" for k, v in s["mapping"].items() if v)],
              ["Rows in this Review sheet", len(shown)], ["", ""],
-             ["Documents in dataset", s["dataset_rows"]], ["OK", s["rows_ok"]], ["Check (info flags only)", s["rows_check"]],
-             ["Needs fix", s["rows_needs_fix"]], ["", ""], ["FLAGS ON DOCUMENTS", "Rows"]]
+             ["Books (documents) in this report", s["dataset_rows"]], ["OK", s["rows_ok"]], ["Check (info flags only)", s["rows_check"]],
+             ["Needs fix (books)", s["rows_needs_fix"]], ["", ""], ["FLAGS ON DOCUMENTS", "Rows"]]
     lines += [[f"{FLAGS[c][0]}  ({FLAGS[c][1]})", n] for c, n in s["flags"].items()]
-    lines += [["", ""], ["Domains in dataset", s["domains"]], ["Domains with no Base Template", s["domains_without_base"]],
+    lines += [["", ""], ["Domains", s["domains"]], ["Domains OK", s["domains_ok"]], ["Domains to check", s["domains_check"]],
+              ["Domains with books to fix", s["domains_needs_fix"]],
+              ["Domains with no Base Template", s["domains_without_base"]],
               ["Domains taken from the URL", s["domains_derived_from_url"]], ["", ""],
               ["Base Templates compared", s["base_rows"]]]
     lines += [[f"{BASE_FLAGS[c][0]}  ({BASE_FLAGS[c][1]})", n] for c, n in s["base_flags"].items()]
