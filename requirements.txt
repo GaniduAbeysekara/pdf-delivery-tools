@@ -26,8 +26,9 @@ tqdm>=4.66.0
 # Config
 pyyaml>=6.0.0
 
-# Optional browser fallback (uncomment to enable)
-# playwright>=1.40.0
+# Browser control: opens collapsed sections for 'Find PDFs on a Page' (and the optional browser fallback).
+# It uses the Microsoft Edge or Google Chrome already installed - no separate browser download is needed.
+playwright>=1.40.0
 
 # Dev / testing
 pytest>=7.4.0

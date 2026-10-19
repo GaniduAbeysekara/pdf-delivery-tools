@@ -72,6 +72,8 @@
   .ps-btn { padding:.15rem .6rem !important; font-size:.72rem !important; margin-right:.4rem; }
   .xl-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.8rem; margin:.8rem 0; }
   .preview td { max-width:260px; }
+  .optrow { display:flex; gap:.5rem; align-items:flex-start; margin-top:.8rem; font-size:.84rem; color:var(--text2); cursor:pointer; } .optrow input { margin-top:.2rem; } .optrow b { color:var(--text); }
+  #pd-bar { height:100%; width:0; background:linear-gradient(90deg,var(--accent2),var(--green)); transition:width .3s; }
 </style>
 {% endblock %}
 {% block content %}
@@ -88,6 +90,7 @@
       <button class="tab" data-t="excel">Excel Batch Upload</button>
       <button class="tab" data-t="backlog">From Daily Backlog</button>
       <button class="tab" data-t="source">Page Source</button>
+      <button class="tab" data-t="find">Find PDFs on a Page</button>
     </div>
 
     <div id="p-urls">
@@ -134,6 +137,48 @@
       <button class="btn" id="go-src">Analyze page source</button>
     </div>
 
+    <div id="p-find" style="display:none">
+      <div class="howto">
+        <b>For one page that lists many PDFs</b> (a code of laws, a list of reports, folders or years you click open...).
+        <ol>
+          <li>Paste the page address.</li>
+          <li><b>Scope</b> (optional): a CSS selector for the links you want, e.g. <code>#cmctree&gt;.tlist&gt;li:nth-of-type(1) a[data-pdf*='.pdf']</code>.
+              Leave it empty to take every PDF link on the page.</li>
+          <li>Collapsed sections inside the scope are <b>opened for you</b> in a browser (only inside the scope), then every PDF found is analysed: page count, last modified, file size, language.</li>
+        </ol>
+      </div>
+      <div class="msg info" id="f-recipe" hidden>
+        <b id="f-recipe-name"></b>
+        <div class="hint" id="f-recipe-desc" style="margin:.3rem 0"></div>
+        <div id="f-recipe-opts" style="display:grid;gap:.5rem;margin-top:.4rem"></div>
+      </div>
+      <div class="msg warn" id="find-caps" hidden>Playwright is not installed, so only the links already in the page's HTML can be read. Run <code>pip install playwright</code> to let the tool open collapsed sections (it uses the Edge or Chrome already on this computer).</div>
+      <div class="xl-grid">
+        <div style="grid-column:1/-1"><label class="fl" for="f-url">Page address (URL) *</label><input class="fin" id="f-url" type="text" placeholder="https://cnmilaw.gov/commonwealth-code" /></div>
+        <div style="grid-column:1/-1"><label class="fl" for="f-scope">Scope - CSS selector (optional)</label><input class="fin" id="f-scope" type="text" spellcheck="false" style="font-family:Consolas,monospace" placeholder="#cmctree>.tlist>li:nth-of-type(1) a[data-pdf*='.pdf']" /></div>
+        <div style="grid-column:1/-1">
+          <div id="f-levels"></div>
+          <button type="button" class="btn ghost" id="f-addlevel">+ Add a level: open each link found, then apply another scope</button>
+          <div class="hint" id="f-lvl-hint" hidden style="margin-top:.4rem">With levels, the links the scope above selects are <b>pages to open</b>; on each of those pages the next level's scope selects links, and so on. The links of the <b>last level are the PDFs</b>. Links that only a script knows (<code>javascript:void(0)</code> with a click handler) are clicked in a browser to learn where they lead.</div>
+        </div>
+      </div>
+      <details style="margin:.4rem 0 .8rem">
+        <summary style="cursor:pointer;color:var(--text2)">Advanced options</summary>
+        <div class="xl-grid">
+          <div><label class="fl" for="f-mode">How to read the page</label>
+            <select class="fin" id="f-mode"><option value="auto">Automatic (recommended)</option><option value="page">Page HTML only (fast, no clicking)</option><option value="browser">Always use the browser</option></select></div>
+          <div><label class="fl" for="f-max">Maximum PDFs to analyse</label><input class="fin" id="f-max" type="number" min="1" max="5000" value="3000" /></div>
+          <div><label class="fl" for="f-pages">Maximum pages to open (levels 2 and up)</label><input class="fin" id="f-pages" type="number" min="1" max="1500" value="300" /></div>
+          <div><label class="fl" for="f-click">Extra "click to open" selector</label><input class="fin" id="f-click" type="text" spellcheck="false" placeholder="only if some sections are not opened by themselves" /></div>
+          <div><label class="fl" for="f-next">"Next page" button selector</label><input class="fin" id="f-next" type="text" spellcheck="false" placeholder="e.g. a.next, button.load-more" /></div>
+        </div>
+        <label style="display:block;margin:.3rem 0;font-size:.85rem"><input type="checkbox" id="f-word" /> Also take Word files (.doc, .docx)</label>
+        <label style="display:block;margin:.3rem 0;font-size:.85rem"><input type="checkbox" id="f-trust" /> Strict: only keep addresses that end in .pdf (otherwise every link the scope selects is kept and the analysis checks what it really is)</label>
+      </details>
+      <button class="btn" id="go-find">Find and analyze PDFs</button> <button class="btn ghost" id="find-stop" hidden>Stop</button>
+      <div class="msg info" id="find-progress" hidden style="margin-top:.7rem"></div>
+    </div>
+
     <div id="p-backlog" style="display:none">
       <div id="bl-empty" class="empty">No books received yet. In the <a href="/backlog">Daily Backlog Dashboard</a>, tick books in the table and choose <b>Analyze Selected URLs</b>.</div>
       <div id="bl-full" style="display:none">
@@ -143,6 +188,9 @@
         <button class="btn" id="go-backlog">Analyze URLs</button>
       </div>
     </div>
+    <label class="optrow"><input type="checkbox" id="use-browser" />
+      <span><b>Open blocked sites in a browser window.</b> When a site refuses the automated check (HTTP 403, Cloudflare...), the tool opens it in a real Edge/Chrome window and reads the file there.
+        If the site shows a verification page, approve it in that window yourself - the tool waits for you. Slower, and only used for the blocked URLs.</span></label>
     <div class="msg" id="msg"></div>
   </div>
 
@@ -150,8 +198,9 @@
     <div class="dhead">
       <div><h2>URL ANALYSIS</h2><div class="src" id="src"></div></div>
     </div>
+    <div class="msg warn" id="browser-wait" hidden></div>
     <div class="box" id="progress"><div class="bar"><div id="bar"></div></div>
-      <div class="pinfo"><span id="ptext">Starting...</span><span id="ppct">0%</span></div></div>
+      <div class="pinfo"><span id="ptext">Starting...</span><span><button class="btn ghost" id="stop-an" hidden type="button" style="padding:.15rem .7rem">Stop analysis</button> <span id="ppct">0%</span></span></div></div>
     <div class="msg" id="cachemsg"></div>
     <dialog id="ps-dlg">
       <h3>Paste page source</h3>
@@ -169,6 +218,32 @@
       <div style="margin-top:.5rem"><input type="file" id="ps-file" accept=".html,.htm,.txt,text/html" /></div>
       <div class="msg" id="ps-msg"></div>
       <div class="row"><button class="btn ghost" id="ps-cancel">Cancel</button><button class="btn" id="ps-go">Analyze this page</button></div>
+    </dialog>
+
+    <dialog id="pd-dlg">
+      <h3>Download PDFs</h3>
+      <div class="hint" id="pd-what"></div>
+      <div id="pd-setup">
+        <label class="fl" for="pd-folder" style="margin-top:.8rem">Save into (a NEW folder is created inside it)</label>
+        <input class="fin" id="pd-folder" type="text" spellcheck="false" />
+        <div class="hint">Each file is named with its Document ID (<code>DOC123.pdf</code>); rows without an ID are named <code>NoDocumentId_Row&lt;n&gt;.pdf</code>. A <code>download_report.csv</code> in the folder lists what was saved, failed or skipped, and why. Nothing is put in your Downloads folder.</div>
+        <label class="optrow" style="margin-top:.6rem"><input type="checkbox" id="pd-browser" /> <span>Open blocked sites in a browser window (you approve any verification page yourself)</span></label>
+      </div>
+      <div id="pd-run" hidden>
+        <div class="bar" style="margin-top:.8rem"><div id="pd-bar"></div></div>
+        <div class="pinfo"><span id="pd-text"></span><span id="pd-pct">0%</span></div>
+        <div class="msg warn" id="pd-wait" hidden></div>
+        <div id="pd-active" class="notes"></div>
+        <div class="hint" style="margin-top:.5rem">Folder: <code id="pd-path" style="word-break:break-all"></code></div>
+        <div id="pd-fails" class="notes"></div>
+      </div>
+      <div class="msg" id="pd-msg"></div>
+      <div class="row">
+        <button class="btn ghost" id="pd-close">Close</button>
+        <button class="btn ghost" id="pd-stop" hidden>Stop</button>
+        <button class="btn ghost" id="pd-open" hidden>Open folder</button>
+        <button class="btn" id="pd-go">Start saving</button>
+      </div>
     </dialog>
 
     <div class="cards" id="cards" style="margin-top:1rem"></div>
@@ -209,7 +284,9 @@
           <button class="btn ghost" id="copysel" disabled>Copy selected URLs</button>
           <button class="btn ghost" id="re-sel" disabled>Re-analyze Selected</button>
           <button class="btn ghost" id="re-all" disabled>Re-analyze All</button>
+          <button class="btn ghost" id="re-blocked" disabled title="Re-check the URLs the site refused (HTTP 401/403) in a real browser window">Retry blocked in browser window</button>
           <button class="btn" id="to-bta" disabled title="Compare these URLs with the Base Templates (joined on domain)">Send to Base Template Analysis</button>
+          <button class="btn green" id="dl-pdfs" disabled title="Save the documents into a NEW folder, each file named with its Document ID">Download PDFs</button>
           <button class="btn green" id="dl-sel" disabled>Download Selected</button>
           <button class="btn green" id="dl" disabled>Download Analysis Results</button>
         </div>
@@ -232,11 +309,30 @@ const F = {domain: new Set(), http: new Set(), status: new Set(), urltype: new S
 let quick = 'all', q = '', qCode = '', qTpl = '', sortCol = 'idx', sortAsc = true, page = 1, selected = new Set(), dirty = false, lastState = 'running';
 const PAGE = 100;
 
+/* ---------- state kept in sessionStorage so nothing is lost when you open another tool and come back ---------- */
+const SKEY = 'urlAnalysisState';
+let ready = false, saveTimer = null;
+function saveState() {
+  if (!ready) return;                                     // never overwrite the saved state before it has been restored
+  const base = {useBrowser: $('use-browser').checked, jobId, tab, quick, q, qCode, qTpl, sortCol, sortAsc, page, selected: [...selected], source, sourceName, transferId, upload,
+    F: Object.fromEntries(Object.entries(F).map(([k, v]) => [k, [...v]])),
+    xl: {url: $('xl-url').value, id: $('xl-id').value, title: $('xl-title').value, code: $('xl-code').value, tpl: $('xl-tpl').value},
+    drafts: {urls: $('t-urls').value, srcUrl: $('src-url').value, srcId: $('src-id').value, srcTitle: $('src-title').value,
+      find: {url: $('f-url').value, scope: $('f-scope').value, click: $('f-click').value, next: $('f-next').value, mode: $('f-mode').value, max: $('f-max').value, word: $('f-word').checked, trust: $('f-trust').checked, levels: readLevels(true), pages: $('f-pages').value, recipe: readRecipe()}},
+    findId};
+  const attempts = [{...base, drafts: {...base.drafts, srcHtml: $('src-html').value}}, base, {...base, drafts: {}}];   // drop big drafts if storage is full
+  for (const a of attempts) { try { sessionStorage.setItem(SKEY, JSON.stringify(a)); return; } catch (e) {} }
+}
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(saveState, 300); }
+window.addEventListener('pagehide', saveState);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveState(); });
+
 /* ---------- input tabs ---------- */
 function setTab(t) {
   tab = t;
   document.querySelectorAll('#tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.t === t));
-  ['urls', 'excel', 'backlog', 'source'].forEach(k => $('p-' + k).style.display = k === t ? 'block' : 'none');
+  ['urls', 'excel', 'backlog', 'source', 'find'].forEach(k => $('p-' + k).style.display = k === t ? 'block' : 'none');
+  saveSoon();
 }
 document.querySelectorAll('#tabs .tab').forEach(b => b.onclick = () => {
   setTab(b.dataset.t);
@@ -245,14 +341,12 @@ document.querySelectorAll('#tabs .tab').forEach(b => b.onclick = () => {
 function showMsg(kind, text) { const m = $('msg'); m.className = 'msg ' + kind; m.textContent = text; }
 
 /* ---------- input 3: books handed over from the Daily Backlog ---------- */
-(async function init() {
-  const params = new URLSearchParams(location.search);
-  const want = params.get('tab'); if (['urls', 'excel', 'backlog', 'source'].includes(want)) setTab(want);
-  const tid = params.get('transfer'); if (!tid) return;
+let transferId = null;
+async function loadTransfer(tid, quiet) {
   try {
     const r = await fetch('/api/transfer/' + encodeURIComponent(tid)); const d = await r.json();
     if (!r.ok) throw new Error(d.error);
-    transfer = d; setTab('backlog');
+    transfer = d; transferId = tid;
     if (d.source && d.source.tool === 'backlog') $('back').style.display = 'inline-block';
     $('bl-empty').style.display = 'none'; $('bl-full').style.display = 'block';
     $('bl-title').textContent = `${d.items.length} URL${d.items.length === 1 ? '' : 's'} received from Daily Backlog` + (d.source && d.source.report_date ? ` (report ${d.source.report_date})` : '');
@@ -263,8 +357,9 @@ function showMsg(kind, text) { const m = $('msg'); m.className = 'msg ' + kind; 
     $('bl-preview').innerHTML = '<table><thead><tr><th>Document ID</th><th>Book Title</th><th>Code</th><th>SpideringTemplate</th><th>URL</th><th>API Result</th><th>Book Type</th></tr></thead><tbody>'
       + d.items.slice(0, 50).map(i => `<tr><td>${esc(i.document_id)}</td><td title="${esc(i.book_title)}">${esc(i.book_title)}</td><td title="${esc(i.code)}">${esc(i.code)}</td><td title="${esc(i.spidering_template)}">${esc(i.spidering_template)}</td><td title="${esc(i.url)}">${esc(i.url)}</td><td>${esc(i.api_result)}</td><td>${esc(i.book_type)}</td></tr>`).join('')
       + '</tbody></table>' + (d.items.length > 50 ? `<div class="hint" style="padding:.4rem .7rem">Showing the first 50 of ${d.items.length}.</div>` : '');
-  } catch (e) { showMsg('err', e.message || 'Could not load the selected books.'); }
-})();
+    return true;
+  } catch (e) { transferId = null; if (!quiet) showMsg('err', e.message || 'Could not load the selected books.'); return false; }
+}
 
 /* ---------- input 2: Excel upload ---------- */
 $('xl-file').onchange = async () => {
@@ -274,33 +369,45 @@ $('xl-file').onchange = async () => {
   try {
     const r = await fetch(API + '/excel/inspect', {method: 'POST', body: form}); const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Could not read the file.');
-    upload = d; $('msg').className = 'msg';
-    const opts = (sel, blank, chosen) => $(sel).innerHTML = `<option value="">${blank}</option>` + d.columns.map(c => `<option value="${esc(c)}" ${c === chosen ? 'selected' : ''}>${esc(c)}</option>`).join('');
-    opts('xl-url', 'Select URL Column', d.url_column && d.confident ? d.url_column : ''); opts('xl-id', '(none)', d.id_column); opts('xl-title', '(none)', d.title_column); opts('xl-code', '(none)', d.code_column); opts('xl-tpl', '(none)', d.template_column);
-    $('xl-auto').textContent = d.url_column && d.confident ? '(detected automatically)' : '';
-    $('xl-info').textContent = `${d.file_name} - sheet "${d.sheet}" - ${d.rows.toLocaleString()} rows, ${d.columns.length} columns` + (d.confident ? '' : '. The URL column could not be identified with confidence - please choose it.');
-    $('xl-preview').innerHTML = '<table><thead><tr>' + d.columns.map(c => `<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>'
-      + d.preview.map(row => '<tr>' + d.columns.map(c => `<td title="${esc(row[c])}">${esc(row[c])}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
-    $('xl-panel').style.display = 'block'; $('go-excel').disabled = !$('xl-url').value;
+    $('msg').className = 'msg'; showUpload(d); saveSoon();
   } catch (e) { showMsg('err', e.message); }
 };
+/* shows the column pickers for an inspected workbook; `chosen` restores earlier picks when coming back to the page */
+function showUpload(d, chosen) {
+  upload = d;
+  const pick = (k, dflt) => chosen && k in chosen ? chosen[k] : dflt;
+  const opts = (sel, blank, value) => $(sel).innerHTML = `<option value="">${blank}</option>` + d.columns.map(c => `<option value="${esc(c)}" ${c === value ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  opts('xl-url', 'Select URL Column', pick('url', d.url_column && d.confident ? d.url_column : '')); opts('xl-id', '(none)', pick('id', d.id_column)); opts('xl-title', '(none)', pick('title', d.title_column));
+  opts('xl-code', '(none)', pick('code', d.code_column)); opts('xl-tpl', '(none)', pick('tpl', d.template_column));
+  $('xl-auto').textContent = !chosen && d.url_column && d.confident ? '(detected automatically)' : '';
+  $('xl-info').textContent = `${d.file_name} - sheet "${d.sheet}" - ${d.rows.toLocaleString()} rows, ${d.columns.length} columns` + (d.confident ? '' : '. The URL column could not be identified with confidence - please choose it.');
+  $('xl-preview').innerHTML = '<table><thead><tr>' + d.columns.map(c => `<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>'
+    + d.preview.map(row => '<tr>' + d.columns.map(c => `<td title="${esc(row[c])}">${esc(row[c])}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+  $('xl-panel').style.display = 'block'; $('go-excel').disabled = !$('xl-url').value;
+}
 $('xl-url').onchange = () => { $('go-excel').disabled = !$('xl-url').value; $('xl-auto').textContent = ''; };
+['xl-url', 'xl-id', 'xl-title', 'xl-code', 'xl-tpl'].forEach(i => $(i).addEventListener('change', () => saveSoon()));
 
 /* ---------- run (all three input methods end in the same job) ---------- */
+/* a new analysis job has started on the server (from any input): reset the view and follow its progress */
+function adoptJob(d) {
+  jobId = d.job_id; R = new Array(d.total).fill(null); next = 0; selected.clear(); page = 1; quick = 'all';
+  Object.values(F).forEach(s => s.clear()); syncFilterButtons(); q = qCode = qTpl = ''; $('q').value = $('code-q').value = $('tpl-q').value = ''; source = d.source; sourceName = d.source_name || '';
+  const bits = [`Analyzing ${d.total} URL${d.total === 1 ? '' : 's'}`];
+  if (d.duplicates_removed) bits.push(`${d.duplicates_removed} duplicate URL(s) removed`);
+  if (d.invalid) bits.push(`${d.invalid} line(s) are not valid URLs and will be reported as failed`);
+  showMsg('info', bits.join(' - ') + (d.notes && d.notes.length ? '. ' + d.notes.join(' ') : ''));
+  $('results').style.display = 'block'; $('progress').style.display = 'block'; ['dl', 're-sel', 're-all'].forEach(i => $(i).disabled = true);
+  dirty = true; render(true); startPolling(); saveSoon();
+}
 async function start(path, body, label) {
+  body = {...body, browser: $('use-browser').checked};
   ['go-urls', 'go-excel', 'go-backlog'].forEach(i => $(i).disabled = true); showMsg('info', 'Preparing...');
   try {
     const r = await fetch(API + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Could not start the analysis.');
-    jobId = d.job_id; R = new Array(d.total).fill(null); next = 0; selected.clear(); page = 1; quick = 'all';
-    Object.values(F).forEach(s => s.clear()); q = qCode = qTpl = ''; $('q').value = $('code-q').value = $('tpl-q').value = ''; source = d.source; sourceName = '';
-    const bits = [`Analyzing ${d.total} URL${d.total === 1 ? '' : 's'}`];
-    if (d.duplicates_removed) bits.push(`${d.duplicates_removed} duplicate URL(s) removed`);
-    if (d.invalid) bits.push(`${d.invalid} line(s) are not valid URLs and will be reported as failed`);
-    showMsg('info', bits.join(' - ') + (d.notes && d.notes.length ? '. ' + d.notes.join(' ') : ''));
-    $('results').style.display = 'block'; $('progress').style.display = 'block'; ['dl', 're-sel', 're-all'].forEach(i => $(i).disabled = true);
-    dirty = true; render(true); startPolling();
+    adoptJob(d);
   } catch (e) { showMsg('err', e.message); }
   finally { $('go-urls').disabled = false; $('go-backlog').disabled = false; $('go-excel').disabled = !$('xl-url').value; }
 }
@@ -325,6 +432,102 @@ $('go-src').onclick = () => {
                      document_id: $('src-id').value.trim(), book_title: $('src-title').value.trim()});
 };
 
+/* ---------- input 5: a page that lists many PDFs ---------- */
+let findId = null, findPoll = null;
+const hostOf = u => { try { return new URL(u).hostname; } catch { return ''; } };
+/* extra levels: "open each link found, then apply this scope" */
+function addLevel(value) {
+  const rows = $('f-levels'), n = rows.children.length + 2;
+  if (rows.children.length >= 4) return;
+  const row = document.createElement('div'); row.className = 'lvl'; row.style.cssText = 'display:flex;gap:.5rem;align-items:flex-end;margin:.5rem 0';
+  const box = document.createElement('div'); box.style.flex = '1';
+  const lab = document.createElement('label'); lab.className = 'fl'; lab.textContent = 'Level ' + n + ' scope - applied on every page opened from the level before';
+  const inp = document.createElement('input'); inp.className = 'fin f-lvl'; inp.type = 'text'; inp.spellcheck = false; inp.style.fontFamily = 'Consolas,monospace';
+  inp.placeholder = ".rowEven td a"; inp.value = value || ''; inp.setAttribute('aria-label', 'Level ' + n + ' scope');
+  const del = document.createElement('button'); del.type = 'button'; del.className = 'btn ghost'; del.textContent = 'Remove';
+  del.onclick = () => { row.remove(); relabelLevels(); saveSoon(); };
+  inp.addEventListener('input', saveSoon);
+  box.append(lab, inp); row.append(box, del); rows.appendChild(row); relabelLevels(); saveSoon();
+}
+function relabelLevels() {
+  [...$('f-levels').children].forEach((row, i) => { row.querySelector('label').textContent = 'Level ' + (i + 2) + ' scope - applied on every page opened from the level before'; row.querySelector('input').setAttribute('aria-label', 'Level ' + (i + 2) + ' scope'); });
+  $('f-lvl-hint').hidden = !$('f-levels').children.length; $('f-addlevel').hidden = $('f-levels').children.length >= 4;
+}
+const readLevels = keepBlank => [...document.querySelectorAll('.f-lvl')].map(i => i.value.trim()).filter(v => keepBlank || v);
+$('f-addlevel').onclick = () => { addLevel(''); const l = document.querySelectorAll('.f-lvl'); l[l.length - 1].focus(); };
+/* a page with its own dedicated crawler (a "recipe"): shown as soon as the address is recognised */
+let recipe = null, recipeTimer = null;
+function paintRecipe(r, values) {
+  recipe = r; $('f-recipe').hidden = !r;
+  if (!r) return;
+  $('f-recipe-name').textContent = 'Recognised page: ' + r.name; $('f-recipe-desc').textContent = r.description;
+  const box = $('f-recipe-opts'); box.replaceChildren();
+  r.options.forEach(o => {
+    const w = document.createElement('div');
+    if (o.type === 'select') {
+      const l = document.createElement('label'); l.className = 'fl'; l.textContent = o.label; l.htmlFor = 'ro-' + o.key;
+      const s = document.createElement('select'); s.className = 'fin'; s.id = 'ro-' + o.key;
+      o.choices.forEach(([v, t]) => s.appendChild(new Option(t, v))); s.value = (values && values[o.key]) || '';
+      s.onchange = saveSoon; w.append(l, s);
+    } else {
+      const l = document.createElement('label'); l.style.cssText = 'display:block;font-size:.85rem';
+      const c = document.createElement('input'); c.type = 'checkbox'; c.id = 'ro-' + o.key; c.checked = !!(values && values[o.key]); c.onchange = saveSoon;
+      l.append(c, ' ' + o.label); w.appendChild(l);
+    }
+    box.appendChild(w);
+  });
+}
+const readRecipe = () => { const v = {}; if (recipe) recipe.options.forEach(o => { const e = $('ro-' + o.key); if (e) v[o.key] = o.type === 'checkbox' ? e.checked : e.value; }); return v; };
+async function refreshRecipe(values) {
+  const url = $('f-url').value.trim();
+  if (url.length < 8) { paintRecipe(null); return; }
+  try { const d = await (await fetch(API + '/find-pdfs/recipe?url=' + encodeURIComponent(url))).json(); paintRecipe(d.recipe, values); } catch { /* keep what is shown */ }
+}
+$('f-url').addEventListener('input', () => { clearTimeout(recipeTimer); recipeTimer = setTimeout(() => refreshRecipe(), 450); });
+function findUi(running) { $('go-find').disabled = running; $('find-stop').hidden = !running; $('find-stop').disabled = false; $('find-stop').textContent = 'Stop'; }
+function stopFind(message, kind) {
+  clearInterval(findPoll); findUi(false); findId = null; $('find-progress').hidden = true; saveSoon();
+  if (message) showMsg(kind || 'info', message);
+}
+$('go-find').onclick = async () => {
+  if (!$('f-url').value.trim()) { showMsg('err', 'Enter the address of the page.'); return; }
+  const body = {url: $('f-url').value.trim(), scope: $('f-scope').value.trim(), click_selector: $('f-click').value.trim(), next_selector: $('f-next').value.trim(),
+                mode: $('f-mode').value, max_items: +$('f-max').value || 0, strict: $('f-trust').checked, follow: readLevels(false), max_pages: +$('f-pages').value || 0, recipe: readRecipe(), types: $('f-word').checked ? ['pdf', 'word'] : ['pdf'], browser: $('use-browser').checked};
+  findUi(true); showMsg('info', 'Starting the search...'); $('find-progress').hidden = false; $('find-progress').textContent = 'Starting...';
+  try {
+    const r = await fetch(API + '/find-pdfs', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'}, body: JSON.stringify(body)});
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not start the search.');
+    findId = d.find_id; saveSoon(); pollFind();
+  } catch (e) { stopFind(e.message, 'err'); }
+};
+$('find-stop').onclick = async () => {
+  if (!findId) return;
+  $('find-stop').disabled = true; $('find-stop').textContent = 'Stopping...';
+  try { await fetch(`${API}/find-pdfs/${findId}/cancel`, {method: 'POST', headers: {'X-Requested-With': 'fetch'}}); } catch {}
+  $('find-progress').textContent = 'Stopping - finishing the step that is in progress...';
+};
+function pollFind() {
+  clearInterval(findPoll); findUi(true); $('find-progress').hidden = false;
+  const tick = async () => {
+    if (!findId) return;
+    let s;
+    try { const r = await fetch(`${API}/find-pdfs/${findId}`); if (r.status === 404) { stopFind('The earlier search is no longer available (the tool was restarted). Run it again.'); return; } s = await r.json(); } catch { return; }
+    const parts = [s.message || ''];
+    if (s.clicks) parts.push(`${s.clicks.toLocaleString()} sections opened`);
+    if (s.links) parts.push(`${s.links.toLocaleString()} links found so far`);
+    parts.push(`${Math.round(s.seconds)} s`);
+    $('find-progress').textContent = parts.filter(Boolean).join(' - ');
+    if (s.state === 'running') return;
+    if (s.state === 'done') {
+      clearInterval(findPoll); findUi(false); findId = null; $('find-progress').hidden = true;
+      adoptJob({job_id: s.job_id, total: s.found, source: 'Multi-PDF Page', source_name: hostOf(s.url), notes: s.notes, duplicates_removed: (s.stats || {}).duplicates || 0});
+    } else if (s.state === 'cancelled') stopFind('Search stopped.');
+    else stopFind(s.error, 'err');
+  };
+  tick(); findPoll = setInterval(tick, 900);
+}
+fetch(API + '/find-pdfs/capabilities').then(r => r.json()).then(d => { $('find-caps').hidden = !!d.browser; }).catch(() => {});
+
 /* ---------- BLOCKED row: paste the page source for just that row ---------- */
 let psIndex = null;
 const dlg = $('ps-dlg');
@@ -344,8 +547,14 @@ $('ps-go').onclick = async () => {
 };
 $('go-excel').onclick = () => { if (upload) { sourceName = upload.file_name; start('/excel/analyze', {upload_id: upload.upload_id, url_column: $('xl-url').value, id_column: $('xl-id').value, title_column: $('xl-title').value, code_column: $('xl-code').value, template_column: $('xl-tpl').value}); } };
 
+$('stop-an').onclick = async () => {
+  if (!jobId) return;
+  $('stop-an').disabled = true; $('stop-an').textContent = 'Stopping...';
+  try { await fetch(`${API}/${jobId}/cancel`, {method: 'POST', headers: {'X-Requested-With': 'fetch'}}); } catch {}
+};
 function startPolling() {
   clearInterval(poll); lastState = 'running';
+  $('stop-an').hidden = false; $('stop-an').disabled = false; $('stop-an').textContent = 'Stop analysis';
   poll = setInterval(async () => {
     let d; try { d = await (await fetch(`${API}/${jobId}/status?from=${next}`)).json(); } catch { return; }
     if (!d.state) return;
@@ -354,16 +563,90 @@ function startPolling() {
     source = d.source; if (d.source_name) sourceName = d.source_name;
     const pct = d.batch_total ? Math.round(d.batch_done / d.batch_total * 100) : 0;
     $('bar').style.width = pct + '%'; $('ppct').textContent = pct + '%'; $('ptext').textContent = `${d.batch_done} of ${d.batch_total} URLs analysed`;
+    showWait($('browser-wait'), d.state === 'running' && d.browser, skipBrowserUrl);
     ['dl'].forEach(i => $(i).disabled = d.done === 0); render();
     if (d.state !== 'running') {
-      clearInterval(poll); lastState = d.state; $('re-all').disabled = false; render(true);
-      if (d.state === 'error') showMsg('err', d.error); else showMsg('ok', `Analysis complete: ${d.batch_done} URL${d.batch_done === 1 ? '' : 's'} analysed.`);
+      clearInterval(poll); lastState = d.state; $('re-all').disabled = false; $('stop-an').hidden = true; showWait($('browser-wait'), null); render(true);
+      if (d.state === 'error') showMsg('err', d.error);
+      else if (d.state === 'stopped') showMsg('info', `Analysis stopped: ${d.batch_done} of ${d.batch_total} URL${d.batch_total === 1 ? '' : 's'} analysed. The results so far can be downloaded; "Re-analyze All" checks everything again.`);
+      else showMsg('ok', `Analysis complete: ${d.batch_done} URL${d.batch_done === 1 ? '' : 's'} analysed.`);
     }
   }, 700);
 }
 
+function showWait(box, b, onSkip) {
+  box.hidden = !(b && b.waiting_for_user);
+  if (box.hidden) { box._k = null; return; }
+  if (!box._k) {                                              // built once, so the Skip button is not replaced under the mouse
+    box.replaceChildren(document.createElement('span'));
+    if (onSkip) { const k = document.createElement('button'); k.className = 'btn ghost'; k.style.cssText = 'padding:.1rem .7rem;margin-left:.4rem'; k.textContent = 'Skip this URL'; k.onclick = () => { k.disabled = true; onSkip(); }; box.appendChild(k); }
+    box._k = true;
+  }
+  box.firstChild.textContent = `A browser window is waiting for you: the site shows a verification page (${(b.url || '').slice(0, 80)}). Approve it in that window` + (onSkip ? ', or skip this URL' : '') + ` - ${b.seconds_left}s left.`;
+}
+const skipBrowserUrl = async () => { try { await fetch(`${API}/${jobId}/skip-browser`, {method: 'POST', headers: {'X-Requested-With': 'fetch'}}); } catch {} };
+function showActive(list) {                                   // files being fetched right now, each can be skipped
+  const box = $('pd-active'); box.replaceChildren();
+  (list || []).forEach(a => {
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:.5rem;align-items:center;margin:.2rem 0';
+    const t = document.createElement('span'); t.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    t.textContent = `Row ${a.row}${a.document_id ? ' (' + a.document_id + ')' : ''} - ${a.seconds}s - ${a.url}`;
+    const k = document.createElement('button'); k.className = 'btn ghost'; k.style.cssText = 'padding:.1rem .7rem'; k.textContent = 'Skip';
+    k.onclick = async () => { k.disabled = true; try { await fetch(`${API}/downloads/${pdId}/skip`, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'}, body: JSON.stringify({row: a.row})}); } catch {} };
+    row.append(t, k); box.appendChild(row);
+  });
+}
+
+/* ---------- Download PDFs: the documents are saved into a NEW folder, named by Document ID ---------- */
+let pdId = null, pdTimer = null, pdNext = 0, pdDefaults = null;
+async function openDownloadDialog() {
+  const n = selected.size || R.filter(Boolean).length;
+  $('pd-what').textContent = selected.size ? `${n.toLocaleString()} selected row${n === 1 ? '' : 's'} will be saved.` : `All ${n.toLocaleString()} analysed rows will be saved (tick rows first to save only some).`;
+  $('pd-setup').hidden = false; $('pd-run').hidden = true; $('pd-go').hidden = false; $('pd-go').disabled = false; $('pd-stop').hidden = true; $('pd-open').hidden = true;
+  $('pd-msg').className = 'msg'; $('pd-msg').textContent = ''; $('pd-browser').checked = $('use-browser').checked; $('pd-fails').textContent = '';
+  if (!pdDefaults) { try { pdDefaults = await (await fetch(API + '/downloads/defaults')).json(); } catch { pdDefaults = {base: '', local: true}; } }
+  $('pd-folder').placeholder = pdDefaults.base || 'Leave empty to use the default folder';
+  $('pd-folder').disabled = !pdDefaults.local; if (!pdDefaults.local) $('pd-folder').placeholder = 'Only possible on the computer that runs the tool';
+  if (!$('pd-dlg').open) $('pd-dlg').showModal();
+}
+$('dl-pdfs').onclick = openDownloadDialog;
+$('pd-close').onclick = () => { $('pd-dlg').close(); };
+$('pd-go').onclick = async () => {
+  $('pd-go').disabled = true; $('pd-msg').className = 'msg'; $('pd-msg').textContent = '';
+  try {
+    const r = await fetch(`${API}/${jobId}/downloads`, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
+      body: JSON.stringify({indices: selected.size ? [...selected] : null, folder: $('pd-folder').value.trim(), browser: $('pd-browser').checked})});
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not start saving.');
+    pdId = d.download_id; pdNext = 0;
+    $('pd-setup').hidden = true; $('pd-run').hidden = false; $('pd-go').hidden = true; $('pd-stop').hidden = false; $('pd-stop').disabled = false; $('pd-path').textContent = d.folder;
+    $('pd-text').textContent = `Saving ${d.saveable} document${d.saveable === 1 ? '' : 's'}` + (d.skipped ? ` (${d.skipped} row${d.skipped === 1 ? ' has' : 's have'} nothing to save)` : '') + '...';
+    clearInterval(pdTimer); pdTimer = setInterval(pollDownload, 700);
+  } catch (e) { $('pd-msg').className = 'msg err'; $('pd-msg').textContent = e.message; $('pd-go').disabled = false; }
+};
+async function pollDownload() {
+  let d; try { d = await (await fetch(`${API}/downloads/${pdId}?from=${pdNext}`)).json(); } catch { return; }
+  if (!d.state) { clearInterval(pdTimer); $('pd-msg').className = 'msg err'; $('pd-msg').textContent = d.error || 'This download is no longer available.'; return; }
+  pdNext = d.next;
+  const pct = d.total ? Math.round(d.done / d.total * 100) : 0;
+  $('pd-bar').style.width = pct + '%'; $('pd-pct').textContent = pct + '%';
+  $('pd-text').textContent = `Saved ${d.saved.toLocaleString()} - failed ${d.failed.toLocaleString()} - skipped ${d.skipped.toLocaleString()} of ${d.total.toLocaleString()}`;
+  d.events.filter(e => e.status !== 'Saved').forEach(e => { const li = document.createElement('div'); li.textContent = `Row ${e.row}${e.document_id ? ' (' + e.document_id + ')' : ''}: ${e.status} - ${e.error}`; $('pd-fails').appendChild(li); });
+  showWait($('pd-wait'), d.state === 'running' && d.browser);
+  showActive(d.state === 'running' ? d.active : []);
+  if (d.state !== 'running') {
+    clearInterval(pdTimer); $('pd-stop').hidden = true; $('pd-open').hidden = false; showWait($('pd-wait'), null);
+    $('pd-msg').className = 'msg ' + (d.state === 'error' ? 'err' : d.failed ? 'warn' : 'ok');
+    $('pd-msg').textContent = d.state === 'error' ? d.error : (d.state === 'stopped' ? 'Stopped. ' : 'Done. ') + `${d.saved} file${d.saved === 1 ? '' : 's'} saved in the folder above` + (d.failed || d.skipped ? '; download_report.csv in it explains the others.' : '.');
+  }
+}
+$('pd-stop').onclick = async () => { $('pd-stop').disabled = true; try { await fetch(`${API}/downloads/${pdId}/cancel`, {method: 'POST', headers: {'X-Requested-With': 'fetch'}}); } catch {} };
+$('pd-open').onclick = async () => {
+  try { const r = await fetch(`${API}/downloads/${pdId}/open-folder`, {method: 'POST', headers: {'X-Requested-With': 'fetch'}}); if (!r.ok) throw new Error((await r.json()).error); }
+  catch (e) { $('pd-msg').className = 'msg err'; $('pd-msg').textContent = e.message; }
+};
+
 /* ---------- derived data ---------- */
-const done = () => R.filter(Boolean);
+const done = () => { const out = R.filter(Boolean); out.forEach(r => { if (r.section_path === undefined) r.section_path = (r.extra && r.extra['Section Path']) || ''; }); return out; };
 const statusOf = r => r.http_status || 'No response';
 const typeOf = r => r.content_type || 'No response';
 const linkOf = r => r.document_link_type || 'n/a';
@@ -383,7 +666,7 @@ function matchesFilters(r, withQuick = true, skip = '') {
     (!withQuick || QUICK[quick](r)) &&
     (!qCode || String(r.code || '').toLowerCase().includes(qCode.toLowerCase())) &&
     (!qTpl || String(r.spidering_template || '').toLowerCase().includes(qTpl.toLowerCase())) &&
-    (!ql || [r.document_id, r.book_title, r.code, r.spidering_template, r.url, r.domain, r.final_url, r.document_url, r.content_type, r.url_type, r.mime_type, r.error].some(v => String(v || '').toLowerCase().includes(ql)));
+    (!ql || [r.document_id, r.book_title, r.section_path, r.code, r.spidering_template, r.url, r.domain, r.final_url, r.document_url, r.content_type, r.url_type, r.mime_type, r.error].some(v => String(v || '').toLowerCase().includes(ql)));
 }
 function filtered() {
   const key = r => { const v = r[sortCol]; return sortCol === 'page_count' ? (/^\d+$/.test(v) ? +v : -1) : sortCol === 'file_size' ? (r.file_size_bytes ?? -1) : sortCol === 'idx' ? r.idx : String(v ?? '').toLowerCase(); };
@@ -479,10 +762,10 @@ function render(force) {
   domainTable(all);
 
   $('countline').innerHTML = `Showing <b>${rows.length.toLocaleString()}</b> of <b>${R.length.toLocaleString()}</b> URLs`;
-  const cols = [['Document ID', 'document_id'], ['Book Title', 'book_title'], ['Code', 'code'], ['SpideringTemplate', 'spidering_template'], ['URL', 'url'], ['Domain', 'domain'], ['HTTP Status', 'http_status'], ['Status', 'status'],
+  const cols = [['Document ID', 'document_id'], ['Book Title', 'book_title'], ['Section Path', 'section_path'], ['Code', 'code'], ['SpideringTemplate', 'spidering_template'], ['URL', 'url'], ['Domain', 'domain'], ['HTTP Status', 'http_status'], ['Status', 'status'],
     ['URL Type', 'url_type'], ['Final URL', 'final_url'], ['Content Type', 'content_type'], ['Header Content-Type', 'mime_type'], ['Direct Document', 'direct_document'], ['Document URL', 'document_url'],
     ['Link Type', 'document_link_type'], ['Page Count', 'page_count'], ['File Size', 'file_size'], ['Language', 'language'], ['Last Modified', 'last_modified'],
-    ['Analysis Status', 'analysis_status'], ['Error', 'error']].filter(([l, k]) => !['code', 'spidering_template'].includes(k) || all.some(r => r[k]));
+    ['Analysis Status', 'analysis_status'], ['Error', 'error']].filter(([l, k]) => !['code', 'spidering_template', 'section_path'].includes(k) || all.some(r => r[k]));
   const nPages = Math.max(1, Math.ceil(rows.length / PAGE)); page = Math.min(page, nPages);
   const slice = rows.slice((page - 1) * PAGE, page * PAGE);
   const arrow = k => sortCol === k ? (sortAsc ? ' &#9650;' : ' &#9660;') : '';
@@ -509,9 +792,15 @@ function render(force) {
   updateSel();
 }
 function updateSel() {
+  saveSoon();
   $('selinfo').textContent = selected.size ? `${selected.size} selected` : '';
   $('copysel').disabled = !selected.size;
   $('re-sel').disabled = !selected.size || lastState === 'running';
+  const blocked = R.filter(r => r && r.status === 'BLOCKED').length;
+  $('re-blocked').disabled = !blocked || lastState === 'running';
+  $('re-blocked').textContent = blocked ? `Retry blocked (${blocked}) in browser window` : 'Retry blocked in browser window';
+  $('dl-pdfs').disabled = !R.some(Boolean);
+  $('dl-pdfs').textContent = selected.size ? `Download PDFs (${selected.size})` : 'Download PDFs';
   $('dl-sel').disabled = !selected.size;
   $('to-bta').disabled = !R.some(Boolean);
   $('to-bta').textContent = selected.size ? `Send Selected (${selected.size}) to Base Template Analysis` : 'Send All to Base Template Analysis';
@@ -542,16 +831,70 @@ $('copysel').onclick = async () => {
   try { await navigator.clipboard.writeText(urls); $('copysel').textContent = 'Copied'; } catch { $('copysel').textContent = 'Copy failed'; }
   setTimeout(() => $('copysel').textContent = 'Copy selected URLs', 1500);
 };
-async function reanalyze(indices) {
+async function reanalyze(indices, browser) {
+  if (browser) $('use-browser').checked = true;
   try {
-    const r = await fetch(`${API}/${jobId}/reanalyze`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({indices})});
+    const r = await fetch(`${API}/${jobId}/reanalyze`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({indices, browser: $('use-browser').checked})});
     const d = await r.json(); if (!r.ok) throw new Error(d.error);
     showMsg('info', 'Re-checking live...'); $('progress').style.display = 'block'; $('re-all').disabled = true; $('re-sel').disabled = true; startPolling();
   } catch (e) { showMsg('err', e.message); }
 }
 $('re-sel').onclick = () => reanalyze([...selected]);
 $('re-all').onclick = () => reanalyze(null);
+$('re-blocked').onclick = () => reanalyze(R.filter(r => r && r.status === 'BLOCKED').map(r => r.idx), true);
+$('use-browser').addEventListener('change', saveSoon);
 $('dl').onclick = () => { if (jobId) window.location.href = `${API}/${jobId}/download`; };
+
+/* ---------- keep everything when you move to another tool and come back (per browser tab) ---------- */
+['t-urls', 'src-url', 'src-html', 'src-id', 'src-title', 'f-url', 'f-scope', 'f-click', 'f-next', 'f-max', 'f-pages'].forEach(i => $(i).addEventListener('input', saveSoon));
+['f-mode', 'f-word', 'f-trust'].forEach(i => $(i).addEventListener('change', saveSoon));
+(async function restore() {
+  let st = null; try { st = JSON.parse(sessionStorage.getItem(SKEY) || 'null'); } catch (e) {}
+  const params = new URLSearchParams(location.search), TABS = ['urls', 'excel', 'backlog', 'source', 'find'];
+  if (st) {
+    const d = st.drafts || {};
+    $('t-urls').value = d.urls || ''; $('src-url').value = d.srcUrl || ''; $('src-html').value = d.srcHtml || ''; $('src-id').value = d.srcId || ''; $('src-title').value = d.srcTitle || '';
+    const fd = d.find || {};
+    $('f-url').value = fd.url || ''; $('f-scope').value = fd.scope || ''; $('f-click').value = fd.click || ''; $('f-next').value = fd.next || '';
+    $('f-mode').value = fd.mode || 'auto'; if (fd.max) $('f-max').value = fd.max; $('f-word').checked = !!fd.word; $('f-trust').checked = !!fd.trust;
+    if (fd.pages) $('f-pages').value = fd.pages; (fd.levels || []).forEach(addLevel); if (fd.url) refreshRecipe(fd.recipe);
+    if (d.srcHtml) $('src-info').textContent = 'Page source restored (' + Math.round(d.srcHtml.length / 1024).toLocaleString() + ' KB)';
+    quick = QUICK[st.quick] ? st.quick : 'all'; q = st.q || ''; qCode = st.qCode || ''; qTpl = st.qTpl || '';
+    $('q').value = q; $('code-q').value = qCode; $('tpl-q').value = qTpl;
+    sortCol = st.sortCol || 'idx'; sortAsc = st.sortAsc !== false; page = st.page || 1;
+    Object.keys(F).forEach(k => { F[k] = new Set((st.F && st.F[k]) || []); });
+    syncFilterButtons();
+    source = st.source || ''; sourceName = st.sourceName || '';
+    if (st.upload) showUpload(st.upload, st.xl || {});
+    if (TABS.includes(st.tab)) setTab(st.tab);
+    jobId = st.jobId || null;
+  }
+  $('use-browser').checked = !!(st && st.useBrowser);
+  ready = true;                                           // from here on, changes are saved
+  const want = params.get('tab'); if (TABS.includes(want)) setTab(want);
+  const urlTid = params.get('transfer'), tid = urlTid || (st && st.transferId);
+  if (tid && await loadTransfer(tid, !urlTid) && urlTid) setTab('backlog');
+  if (jobId) await restoreJob(st);
+  if (st && st.findId && !jobId) { findId = st.findId; pollFind(); }              // a search that was still running when you left
+  saveState();
+})();
+async function restoreJob(st) {
+  let d;
+  try {
+    const r = await fetch(`${API}/${jobId}/status?from=0`);
+    if (r.status === 404) { jobId = null; showMsg('info', 'Your previous analysis is no longer available (the tool was restarted). Run it again.'); return; }
+    d = await r.json();
+  } catch (e) { return; }                                  // server unreachable: keep the id, a reload may work
+  R = new Array(d.total).fill(null); for (const ev of d.events) R[ev.idx] = ev;
+  next = d.next; source = d.source || source; if (d.source_name) sourceName = d.source_name;
+  selected = new Set((st.selected || []).filter(i => R[i]));
+  const pct = d.batch_total ? Math.round(d.batch_done / d.batch_total * 100) : 0;
+  $('bar').style.width = pct + '%'; $('ppct').textContent = pct + '%'; $('ptext').textContent = `${d.batch_done} of ${d.batch_total} URLs analysed`;
+  $('results').style.display = 'block'; $('progress').style.display = 'block';
+  lastState = d.state; dirty = true; $('dl').disabled = d.done === 0;
+  if (d.state === 'running') { ['re-sel', 're-all'].forEach(i => $(i).disabled = true); render(true); startPolling(); }
+  else { $('re-all').disabled = false; render(true); showMsg(d.state === 'error' ? 'err' : 'ok', d.state === 'error' ? d.error : `Restored your analysis of ${d.total} URL${d.total === 1 ? '' : 's'}.`); }
+}
 </script>
 {% endraw %}
 {% endblock %}

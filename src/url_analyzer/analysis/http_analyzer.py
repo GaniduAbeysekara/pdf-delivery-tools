@@ -33,6 +33,7 @@ class AnalyzerSettings:
     total_deadline: float = 120        # hard cap per URL, including downloads
     max_redirects: int = 10
     max_download_bytes: int = 50 * 1024 * 1024
+    max_save_bytes: int = 200 * 1024 * 1024   # largest single file kept by 'Download PDFs'
     max_workers: int = 5               # overall concurrency
     per_host_limit: int = 2            # be polite to a single website
     retries: int = 1                   # extra attempts for timeouts / connection errors / HTTP 429
@@ -62,6 +63,10 @@ class AnalyzerSettings:
 
 class FetchError(Exception):
     """Expected, user-presentable failure."""
+
+
+class Skipped(Exception):
+    """The person chose to skip this URL."""
 
 
 def resolve_host(host: str) -> list[str]:
@@ -197,14 +202,16 @@ class HTTPAnalyzer:
             return resp, first, hops, cur
 
     @staticmethod
-    def read(it, first: bytes, cap: int, deadline: float) -> tuple[bytes, bool]:
-        """Read the rest of a streamed body up to `cap` bytes. Returns (data, truncated)."""
+    def read(it, first: bytes, cap: int, deadline: float, stop=None) -> tuple[bytes, bool]:
+        """Read the rest of a streamed body up to `cap` bytes. Returns (data, truncated). `stop` (an Event) skips the file."""
         chunks, total = [first], len(first)
         if total >= cap:
             return first, True
         for chunk in it:
             if time.monotonic() > deadline:
                 raise TimeoutError
+            if stop is not None and stop.is_set():
+                raise Skipped
             chunks.append(chunk)
             total += len(chunk)
             if total >= cap:
@@ -227,4 +234,6 @@ class HTTPAnalyzer:
             return "Connection failed: the server could not be reached", True
         if isinstance(exc, FetchError):
             return str(exc), False
+        if isinstance(exc, Skipped):
+            return "Skipped by you.", False
         return f"Unexpected error: {str(exc)[:120]}", False

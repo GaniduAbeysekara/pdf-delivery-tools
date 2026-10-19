@@ -206,6 +206,20 @@ The tool will use Playwright only for pages where static HTML analysis finds no 
 
 ---
 
+## Site-specific crawler: Superfinanciera CBJ attachments
+
+`python scripts/cbj_attachments.py --out output/cbj_attachments.xlsx` walks **Parte -> Titulo -> Capitulo** of the Circular Basica Juridica
+(an iframe-based single-page app) with Playwright and lists every attachment of every Capitulo (PDF/DOC/XLS/... with name, type and the real
+download address). Waits on conditions (selected row, the site's own requests idle) instead of sleeping; never clicks DESCARGAR; reads the main
+page and all iframes; cross-checks the site's attachment data against the DOM and a recorded (cancelled) click; retries, logs and skips failing
+Capitulos; de-duplicates per Capitulo without losing hierarchy; recognises rows the site's menu repeats (same site ids) and reads them once. Code: `src/url_analyzer/recipes/cbj.py`.
+
+**Built into the web app:** *Find PDFs on a Page* recognises this address (`src/url_analyzer/recipes/registry.py`), shows a "Recognised page" panel
+(Only this Parte / Read the files) and runs this crawler instead of the generic search. Its attachments become ready-made analysis results
+(`UrlAnalysisService.start_prepared`) in the normal dashboard and Excel export - the addresses need the site's own session, so they are listed as
+*Unknown* unless **Read the files** is ticked, which reads each file into memory inside that session for size, pages and date. Add a recipe for another
+page by appending a `Recipe` to `RECIPES`.
+
 ## Project Structure
 
 ```
@@ -247,7 +261,25 @@ un_dashboard.bat        # then open http://localhost:8080  (binds to 127.0.0.1; 
 | **Daily Backlog Dashboard** (`/backlog`) | Upload the Reg Transform UI CSV + Power BI Excel, explore the backlog, select books, download the filtered CSV or the 7-tab Excel report. |
 | **URL Analysis** (`/url-analysis`) | One tool, three inputs: **Paste URLs**, **Excel Batch Upload**, **From Daily Backlog**. |
 | **Base Templates** (`/base-templates`) | The team's *Base Template* sheet: search / filter / sort, add, edit, delete, import from and export to Excel. Stored in `data/base_templates.json` (git-ignored). Import "add only new rows" is repeatable, so rows added to the SharePoint sheet can be pulled in. |
-| **Base Template Analysis** (`/base-template-analysis`) | Upload a URL analysis file (Document ID, Domain, Spider Template, URL) and compare it with the Base Templates, joined on domain. Flags missing URLs, missing Spider Templates, missing domains and domains with no Base Template; Excel report with Review / Needs Fix / Domains / Base Templates Review / SUMMARY sheets. The URL Analysis page has a **Send to Base Template Analysis** button (selected rows, or all) that hands its results over, already compared. |
+| **Base Template Analysis** (`/base-template-analysis`) | Upload a URL analysis file (Document ID, Domain, Spider Template, URL) and compare it with the Base Templates, joined on domain. Flags missing URLs, missing Spider Templates, missing domains and domains with no Base Template; A **By Domain** view shows books OK / to check / to fix per domain; tick books or domains and **Download Selected**, or **Download All Data**. Excel report with Review / Needs Fix / Domains / Base Templates Review / SUMMARY sheets. The URL Analysis page has a **Send to Base Template Analysis** button (selected rows, or all) that hands its results over, already compared. The Daily Backlog Dashboard has the same: **Base Template Analysis** (ticked books, or all in the current filters/view) and **Base Template Analysis - All Filtered**; books with no URL are kept so they are flagged. |
+
+### Sites that refuse automated requests, and Download PDFs
+- **Open blocked sites in a browser window** (checkbox under the URL Analysis input box; **Retry blocked in browser window** on a finished analysis).
+  A URL answered with HTTP 401/403 (Cloudflare etc.) is re-read through a real Edge/Chrome window (`analysis/browser_fetch.py`): the site's origin is loaded like
+  a visitor would, and the file is fetched from inside that page with the browser's cookies. A verification page is shown in the (visible) window for the person to
+  approve - the tool only waits (dashboard banner), never solves it. The window has its own persistent profile (`data/browser_profile`); `URL_ANALYZER_BROWSER_HEADLESS=1`
+  hides it (then verification pages cannot be approved). Still refused -> the row stays BLOCKED with the reason.
+- **Download PDFs** (`analysis/downloads.py`): saves the documents of all or the ticked rows into a **new folder** (`<chosen or output/pdf_downloads>/<source>_<date>_<time>`,
+  never the shared Downloads folder), each file named by Document ID (invalid characters replaced, duplicates `_2`, no ID -> `NoDocumentId_Row<n>`), plus `download_report.csv`
+  (status, file, size, how it was read, reason). It uses the same browser fallback when the option is on. Each file being fetched can be **skipped** (button per file; the banner during an analysis has **Skip this URL**), so a slow or unapproved URL never holds up the rest.
+
+### Find PDFs on a Page (multi-PDF pages)
+Give one page address (and, optionally, a CSS **scope** such as ``#cmctree>.tlist>li:nth-of-type(1) a[data-pdf*='.pdf']``). The tool reads the
+page, and when it has collapsed sections or builds its links with JavaScript it opens the page in a headless Edge/Chrome (Playwright), clicks every
+collapsed section **inside the scope**, waits for the content, and collects every PDF link (address from `href` or the attribute the scope names,
+title, outline path). The links then go through the normal analysis (page count, last modified, size, language) and the normal dashboard and
+Excel export, which gain *Section Path* and *Source Page* columns. The page and **every iframe inside it** are read (a scope applies to each; clicking happens inside frames too); a link the scope selects is kept even without a `.pdf` ending (`strict` opts out), and links that say they are a PDF (text / class / icon alt) are recognised when there is no scope. Optional: extra click selector, "next page / load more" selector, Word files,
+maximum. **Several levels:** add levels (each with its own scope) to follow links page by page - e.g. department list -> agency pages -> rule pages -> PDF. Links whose address only a script knows (`javascript:void(0)` + `onclick`) are clicked in the shared browser and the address the page tries to open is recorded. Runs of `>` in a scope (`a>>>>b`) are read as 'somewhere below'. A running search or analysis can be stopped (results so far are kept). Needs `pip install playwright` for the clicking; without it only links already in the HTML are read. Code: `src/url_analyzer/multipdf/`.
 
 ### One URL analysis engine
 
@@ -258,7 +290,7 @@ un_dashboard.bat        # then open http://localhost:8080  (binds to 127.0.0.1; 
  CLI (--input)┘
 ```
 
-Paste URLs, Excel Batch Upload and From Daily Backlog are **the three input tabs of the one URL Analysis tool**
+Paste URLs, Excel Batch Upload, From Daily Backlog, Page Source and **Find PDFs on a Page** are **the input tabs of the one URL Analysis tool**
 (not separate tools). Whatever the input, every URL gets the same analysis:
 
 1. **Does it work?** `Status` = `WORKING` / `NOT_WORKING` (404, 410, 5xx) / `BLOCKED` (401, 403, 429) /

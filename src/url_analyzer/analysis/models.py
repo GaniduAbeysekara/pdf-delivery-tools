@@ -8,6 +8,7 @@ SOURCE_MANUAL = "Manual URL Input"
 SOURCE_EXCEL = "Excel Batch Upload"
 SOURCE_BACKLOG = "Daily Backlog"
 SOURCE_PAGE = "Pasted Page Source"
+SOURCE_FIND = "Multi-PDF Page"
 
 
 @dataclass

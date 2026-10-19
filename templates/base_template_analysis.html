@@ -31,6 +31,11 @@
   .msg { padding:.6rem .9rem; border-radius:8px; margin-bottom:.8rem; border:1px solid var(--border); background:var(--surface); } .msg.err { border-color:var(--red); color:var(--red); }
   .hint { color:var(--text2); font-size:.8rem; line-height:1.45; } .prev { overflow:auto; margin-top:.6rem; } .prev table { min-width:0; font-size:.78rem; } .prev td, .prev th { padding:.25rem .5rem; }
   .legend { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:.4rem 1.2rem; margin-top:.6rem; } .legend div { font-size:.8rem; color:var(--text2); }
+  .share { display:flex; height:10px; width:140px; border-radius:5px; overflow:hidden; background:var(--surface2); }
+  .share i { display:block; height:100%; } .share i.ok { background:var(--green); } .share i.chk { background:var(--yellow); } .share i.fix { background:var(--red); }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; } td.num.ok { color:var(--green); } td.num.fix { color:var(--red); font-weight:700; } td.num.chk { color:var(--yellow); }
+  th.num { text-align:right; } td.cb, th.cb { width:34px; padding-right:0; } .tablewrap input[type=checkbox] { width:16px; height:16px; cursor:pointer; }
+  tr.picked td { background:rgba(108,142,245,.12); }
   .chip { display:inline-flex; gap:.4rem; align-items:center; background:var(--surface2); border:1px solid var(--accent); border-radius:99px; padding:.15rem .3rem .15rem .7rem; font-size:.8rem; }
   .chip button { padding:0 .45rem; border-radius:99px; }
 </style>
@@ -41,10 +46,10 @@
 <div id="msg"></div>
 
 <section class="panel" id="received" hidden>
-  <h2>Received from URL Analysis</h2>
+  <h2 id="recvhead">Received from URL Analysis</h2>
   <p class="hint" id="recvinfo"></p>
   <div class="bar"><button id="recompare" type="button" class="primary">Compare again</button>
-    <a class="btn" href="/url-analysis">Back to URL Analysis</a>
+    <a class="btn" id="recvback" href="/url-analysis">Back to URL Analysis</a>
     <span class="hint">Compare again picks up any Base Templates you have added since.</span></div>
 </section>
 
@@ -62,16 +67,18 @@
 
 <div id="results" hidden>
   <div class="cards" id="cards"></div>
+  <div class="cards" id="domcards"></div>
   <div class="cards" id="flagcards"></div>
   <div class="bar">
-    <a class="btn primary" id="dlall" href="#">Download full report</a>
-    <a class="btn" id="dlfix" href="#">Download rows needing fix</a>
-    <a class="btn" id="dlfil" href="#">Download current filter</a>
-    <span class="hint">The report has Review, Needs Fix, Domains, Base Templates Review and SUMMARY sheets.</span>
+    <a class="btn primary" id="dlall" href="#">Download All Data</a>
+    <button class="btn" id="dlsel" type="button" disabled>Download Selected</button>
+    <a class="btn" id="dlfix" href="#">Books needing a fix only</a>
+    <a class="btn" id="dlfil" href="#">Current filter</a>
+    <span class="hint">Every download has Review, Needs Fix, Domains (OK / Check / Needs fix per domain), Base Templates Review and SUMMARY sheets.</span>
   </div>
   <div class="tabs" role="tablist">
-    <button class="tab on" data-view="rows" type="button">Documents</button>
-    <button class="tab" data-view="domains" type="button">Domains</button>
+    <button class="tab on" data-view="rows" type="button">Books</button>
+    <button class="tab" data-view="domains" type="button">By Domain</button>
     <button class="tab" data-view="base" type="button">Base Templates</button>
   </div>
   <div class="bar">
@@ -79,6 +86,11 @@
     <select id="status" aria-label="Status"><option value="">Status: all</option><option>Needs fix</option><option>Check</option><option>OK</option></select>
     <select id="flag" aria-label="Flag"><option value="">Flag: any</option></select>
     <span id="chips"></span><button id="clear" type="button">Clear</button>
+  </div>
+  <div class="bar" id="selbar">
+    <button id="selfiltered" type="button">Select all filtered</button>
+    <button id="selclear" type="button" disabled>Clear selection</button>
+    <span class="hint" id="selinfo"></span>
   </div>
   <div class="tablewrap"><table><thead><tr id="head"></tr></thead><tbody id="body"></tbody></table><div class="empty" id="empty" hidden></div></div>
   <div class="pager"><button id="prev1" type="button">‹ Prev</button><span id="pageinfo"></span><button id="next1" type="button">Next ›</button></div>
@@ -94,7 +106,20 @@
   const $ = id => document.getElementById(id);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const st = { view: "rows", q: "", status: "", flag: "", domain: "", page: 1 };
-  let up = null, rid = null, summary = null;
+  let up = null, rid = null, summary = null, recv = "", recvTool = "url_analysis", curTid = new URLSearchParams(location.search).get("transfer");
+
+  // Everything on this page is kept (per browser tab) when you open another tool and come back.
+  const SKEY = "baseTemplateAnalysisState";
+  let ready = false;
+  let selRows = new Set(), selDomains = new Set();          // ticked books (row index) and ticked domains
+  function saveState() {
+    if (!ready) return;                                    // never overwrite the saved state before it has been restored
+    const map = {}; FIELD.forEach(([k]) => { const s = $("m_" + k); if (s) map[k] = s.value; });
+    const sheet = $("sheetsel") ? $("sheetsel").value : (up && up.sheet) || "";
+    try { sessionStorage.setItem(SKEY, JSON.stringify({ rid, st, up, map, sheet, recv, recvTool, recvTid: recv ? curTid : null, selRows: [...selRows], selDomains: [...selDomains] })); } catch (e) {}
+  }
+  window.addEventListener("pagehide", saveState);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) saveState(); });
 
   function say(kind, text) { const m = $("msg"); m.replaceChildren(); if (text) m.appendChild(el("div", "msg " + kind, text)); }
   async function api(url, opt) {
@@ -129,17 +154,20 @@
     }
     const miss = FIELD.filter(([k]) => k !== "domain" && k !== "document_id" && !d.mapping[k]).map(f => f[1].replace(" *", ""));
     say(miss.length ? "err" : "", miss.length ? "Could not find the " + miss.join(" and ") + " column - choose it below." : "");
+    FIELD.forEach(([k]) => { $("m_" + k).onchange = saveState; });
+    saveState();
   }
   $("file").onchange = async () => {
     const f = $("file").files[0]; if (!f) return;
     const fd = new FormData(); fd.append("file", f); say("", ""); $("mapbox").hidden = true; $("results").hidden = true;
+    recv = ""; $("received").hidden = true; rid = null;
     try { showUpload(await api("/api/bta/upload", { method: "POST", body: fd })); } catch (e) { say("err", e.message); }
   };
   api("/api/base-templates?size=1").then(d => { $("basecount").textContent = d.summary.total + " Base Templates will be used"; }).catch(() => {});
 
   $("run").onclick = async () => {
     const mapping = {}; FIELD.forEach(([k]) => mapping[k] = $("m_" + k).value);
-    $("run").disabled = true; $("run").textContent = "Comparing…"; say("", "");
+    $("run").disabled = true; $("run").textContent = "Comparing…"; say("", ""); recv = ""; $("received").hidden = true;
     try {
       const sheet = $("sheetsel") ? $("sheetsel").value : up.sheet;
       const r = await api("/api/bta/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upload_id: up.upload_id, sheet, mapping }) });
@@ -150,22 +178,58 @@
 
   async function showResults(r) {
     rid = r.result_id; summary = r.summary; Object.assign(st, { view: "rows", q: "", status: "", flag: "", domain: "", page: 1 });
+    selRows.clear(); selDomains.clear();
     $("q").value = ""; $("results").hidden = false; build(); await load();
     $("results").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // ── rows sent from the URL Analysis page ─────────────────────────────────
-  const tid = new URLSearchParams(location.search).get("transfer");
+  const tid = curTid;
+  function showReceived() { paintReceived(); $("received").hidden = false; $("step1").hidden = true; $("recompare").onclick = compareTransfer; }
+  function paintReceived() {
+    const bl = recvTool === "backlog";
+    $("recvhead").textContent = bl ? "Received from the Daily Backlog Dashboard" : "Received from URL Analysis";
+    $("recvback").textContent = bl ? "Back to Daily Backlog Dashboard" : "Back to URL Analysis"; $("recvback").href = bl ? "/backlog" : "/url-analysis";
+    $("recvinfo").textContent = recv;
+  }
   async function compareTransfer() {
     $("recompare").disabled = true; say("", "");
     try {
-      const r = await api("/api/bta/from-transfer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transfer_id: tid }) });
-      $("recvinfo").textContent = r.received.toLocaleString() + " URL" + (r.received === 1 ? "" : "s") + " received from " + ((r.source && r.source.name) || "URL Analysis") + ". They were compared with the current Base Templates using each row's Document ID, Domain, Spider Template and URL. Row numbers are the positions in the URL Analysis results table.";
+      const r = await api("/api/bta/from-transfer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transfer_id: curTid }) });
+      recvTool = (r.source && r.source.tool) || "url_analysis";
+      const bl = recvTool === "backlog";
+      recv = r.received.toLocaleString() + (bl ? " book" : " URL") + (r.received === 1 ? "" : "s") + " received from " + ((r.source && r.source.name) || "URL Analysis") + ". They were compared with the current Base Templates using each row's Document ID, Domain, Spider Template and URL. Row numbers are the positions in the " + (bl ? "Daily Backlog data (the book's position in the report, starting at 1)." : "URL Analysis results table.");
+      paintReceived(); ready = true;
       await showResults(r);
     } catch (e) { say("err", e.message); }
     $("recompare").disabled = false;
   }
-  if (tid) { $("received").hidden = false; $("step1").hidden = true; $("recompare").onclick = compareTransfer; compareTransfer(); }
+  if (tid) { showReceived(); compareTransfer(); }
+
+
+  // ── coming back to the page: bring back the upload, the column choices and the report ──
+  (async function restore() {
+    let s = null; try { s = JSON.parse(sessionStorage.getItem(SKEY) || "null"); } catch (e) {}
+    if (s && !tid) {
+      if (s.up) {
+        try {
+          showUpload(await api("/api/bta/" + s.up.upload_id + "/sheet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sheet: s.sheet || s.up.sheet }) }));
+          FIELD.forEach(([k]) => { const sel = $("m_" + k); if (sel && s.map && k in s.map && [...sel.options].some(o => o.value === s.map[k])) sel.value = s.map[k]; });
+          say("", "");
+        } catch (e) { up = null; $("mapbox").hidden = true; }            // the uploaded copy expired - choose the file again
+      }
+      if (s.rid) {
+        try {
+          const d = await api("/api/bta/" + s.rid + "/rows?size=1");
+          rid = s.rid; summary = d.summary; Object.assign(st, s.st || {});
+          selRows = new Set(s.selRows || []); selDomains = new Set(s.selDomains || []);
+          if (s.recvTid) { curTid = s.recvTid; recv = s.recv || ""; recvTool = s.recvTool || "url_analysis"; showReceived(); $("step1").hidden = false; }
+          $("q").value = st.q || ""; $("results").hidden = false; build(); await load();
+        } catch (e) { rid = null; say("", "Your previous comparison is no longer available (the tool was restarted or it expired). Run it again."); }
+      }
+    }
+    if (!tid) { ready = true; saveState(); }                 // with a fresh hand-off, saving starts once that comparison succeeds
+  })();
 
   // ── results ──────────────────────────────────────────────────────────────
   function card(parent, n, label, cls, onclick, on) {
@@ -174,40 +238,62 @@
   }
   function build() {
     const s = summary, c = $("cards"); c.replaceChildren();
-    card(c, s.dataset_rows, "Documents in file"); card(c, s.rows_needs_fix, "Need fixing", s.rows_needs_fix ? "bad" : "good", () => setFilter({ status: "Needs fix", flag: "" }), st.status === "Needs fix");
-    card(c, s.rows_check, "To check (info only)", s.rows_check ? "warn" : "good", () => setFilter({ status: "Check", flag: "" })); card(c, s.rows_ok, "OK", "good", () => setFilter({ status: "OK", flag: "" }));
-    card(c, s.base_rows, "Base Templates compared"); card(c, s.domains_without_base, "Domains with no Base Template", s.domains_without_base ? "bad" : "good");
+    card(c, s.dataset_rows, "Books in file", "", () => setFilter({ view: "rows", status: "", flag: "" }), st.view === "rows" && !st.status && !st.flag);
+    card(c, s.rows_needs_fix, "Books to fix", s.rows_needs_fix ? "bad" : "good", () => setFilter({ view: "rows", status: "Needs fix", flag: "" }), st.view === "rows" && st.status === "Needs fix");
+    card(c, s.rows_check, "Books to check (info only)", s.rows_check ? "warn" : "good", () => setFilter({ view: "rows", status: "Check", flag: "" }), st.view === "rows" && st.status === "Check");
+    card(c, s.rows_ok, "Books OK", "good", () => setFilter({ view: "rows", status: "OK", flag: "" }), st.view === "rows" && st.status === "OK");
+    card(c, s.base_rows, "Base Templates compared");
+    const dc = $("domcards"); dc.replaceChildren();
+    const dom = (n, label, cls, status) => card(dc, n, label, cls, () => setFilter({ view: "domains", status, flag: "" }), st.view === "domains" && st.status === status);
+    dom(s.domains, "Domains", "", ""); dom(s.domains_ok, "Domains OK", "good", "OK"); dom(s.domains_check, "Domains to check", s.domains_check ? "warn" : "good", "Check");
+    dom(s.domains_needs_fix, "Domains with books to fix", s.domains_needs_fix ? "bad" : "good", "Needs fix");
+    dom(s.domains_without_base, "Domains with no Base Template", s.domains_without_base ? "bad" : "good", "No Base Template");
     const f = $("flagcards"); f.replaceChildren();
     Object.entries(s.flags).forEach(([code, n]) => card(f, n, FLAGS[code].label, n ? (FLAGS[code].level === "error" ? "bad" : "warn") : "good", () => setFilter({ view: "rows", flag: code, status: "" }), st.flag === code));
     Object.entries(s.base_flags).forEach(([code, n]) => card(f, n, "Base: " + BASE_FLAGS[code].label, n ? (BASE_FLAGS[code].level === "error" ? "bad" : "warn") : "good", () => setFilter({ view: "base", flag: code, status: "" }), st.view === "base" && st.flag === code));
     const sel = $("flag"); sel.replaceChildren(new Option("Flag: any", ""));
     Object.entries(st.view === "base" ? BASE_FLAGS : FLAGS).forEach(([k, v]) => sel.appendChild(new Option(v.label, k))); sel.value = st.flag;
-    $("status").hidden = st.view !== "rows"; $("status").value = st.status; $("flag").hidden = st.view === "domains";
+    const stat = $("status"); stat.replaceChildren(new Option("Status: all", ""));
+    (st.view === "domains" ? ["Needs fix", "No Base Template", "No domain", "Check", "OK"] : ["Needs fix", "Check", "OK"]).forEach(x => stat.appendChild(new Option(x, x)));
+    stat.value = st.status; stat.hidden = st.view === "base"; $("flag").hidden = st.view === "domains"; $("selbar").hidden = st.view === "base"; updateSel();
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.view === st.view));
     const ch = $("chips"); ch.replaceChildren();
     if (st.domain) { const x = el("span", "chip", "Domain: " + st.domain); const b = el("button", "", "×"); b.type = "button"; b.setAttribute("aria-label", "Remove domain filter"); b.onclick = () => setFilter({ domain: "" }); x.appendChild(b); ch.appendChild(x); }
     const lg = $("legend"); lg.replaceChildren();
     Object.values(ALL_FLAGS).forEach(v => { const d = el("div"); d.appendChild(el("span", "badge " + v.level, v.label)); d.appendChild(document.createTextNode(v.help)); lg.appendChild(d); });
-    const qs = (scope) => "/api/bta/" + rid + "/download?" + new URLSearchParams({ scope, q: st.q, status: st.status, flag: st.view === "rows" ? st.flag : "", domain: st.domain });
+    const qs = (scope) => "/api/bta/" + rid + "/download?" + new URLSearchParams({ scope, view: st.view, q: st.q, status: st.status, flag: st.view === "rows" ? st.flag : "", domain: st.domain });
     $("dlall").href = qs("all"); $("dlfix").href = qs("fix"); $("dlfil").href = qs("filtered");
   }
   function setFilter(o) { Object.assign(st, o, { page: 1 }); if (o.view) st.status = o.status || ""; build(); load(); }
 
   const HEADS = {
     rows: ["Row", "Document ID", "Domain", "Spider Template", "URL", "Status", "Flags", "Base Template(s)", ""],
-    domains: ["Domain", "Documents", "Needing fix", "Missing URL", "Missing Spider Template", "Base Template(s)", "Status"],
+    domains: ["Domain", "Books", "OK", "Check", "Needs fix", "Share", "Missing URL", "Missing Spider Template", "Base Template(s)", "Status"],
     base: ["Cached Domain", "Monitoring Template", "Documents in file", "Flags"],
   };
+  const NUMERIC = new Set(["Books", "OK", "Check", "Needs fix", "Missing URL", "Missing Spider Template"]);
   function badges(td, flags) { flags.forEach(f => td.appendChild(el("span", "badge " + ALL_FLAGS[f].level, ALL_FLAGS[f].label))); return td; }
   function statusBadge(s) { return el("span", "badge " + (s === "OK" ? "OK" : s === "Check" ? "Check" : "error"), s); }
 
   async function load() {
-    const p = new URLSearchParams({ view: st.view, q: st.q, status: st.view === "rows" ? st.status : "", flag: st.view === "domains" ? "" : st.flag, domain: st.domain, page: st.page, size: 50 });
+    const p = new URLSearchParams({ view: st.view, q: st.q, status: st.view === "base" ? "" : st.status, flag: st.view === "domains" ? "" : st.flag, domain: st.domain, page: st.page, size: 50 });
     let d; try { d = await api("/api/bta/" + rid + "/rows?" + p); } catch (e) { say("err", e.message); return; }
-    const h = $("head"); h.replaceChildren(...HEADS[st.view].map(x => el("th", "", x)));
+    const h = $("head"); h.replaceChildren(...HEADS[st.view].map(x => el("th", NUMERIC.has(x) && st.view === "domains" ? "num" : "", x)));
+    const sel = st.view === "rows" ? selRows : selDomains, keyOf = r => st.view === "rows" ? r.idx : r.domain;
+    if (st.view !== "base") {                                  // tick-all-on-this-page box
+      const th = el("th", "cb"), all = el("input"); all.type = "checkbox"; all.setAttribute("aria-label", "Select all on this page");
+      all.checked = d.items.length > 0 && d.items.every(r => sel.has(keyOf(r)));
+      all.onchange = () => { d.items.forEach(r => all.checked ? sel.add(keyOf(r)) : sel.delete(keyOf(r))); updateSel(); load(); };
+      th.appendChild(all); h.prepend(th);
+    }
     const b = $("body"); b.replaceChildren();
     d.items.forEach(r => {
       const tr = el("tr");
+      if (st.view !== "base") {
+        const td = el("td", "cb"), cb = el("input"); cb.type = "checkbox"; cb.checked = sel.has(keyOf(r)); cb.setAttribute("aria-label", "Select");
+        cb.onclick = ev => { ev.stopPropagation(); cb.checked ? sel.add(keyOf(r)) : sel.delete(keyOf(r)); tr.classList.toggle("picked", cb.checked); updateSel(); saveState(); };
+        td.appendChild(cb); tr.appendChild(td); if (cb.checked) tr.classList.add("picked");
+      }
       if (st.view === "rows") {
         tr.append(el("td", "", r.source_row), el("td", "mono", r.document_id), el("td", "mono", r.domain + (r.domain_from_url ? "  (from URL)" : "")),
           el("td", "mono", r.spidering_template), el("td", "url", r.url));
@@ -217,18 +303,50 @@
         if (r.flags.includes("NO_BASE_TEMPLATE")) { const l = el("a", "", "Add base template"); l.href = "/base-templates?add_domain=" + encodeURIComponent(r.domain); a.appendChild(l); }
         tr.appendChild(a);
       } else if (st.view === "domains") {
-        tr.className = "click"; tr.title = "Show this domain's documents"; tr.onclick = () => setFilter(r.domain === "(none)" ? { view: "rows", domain: "", status: "", flag: "MISSING_DOMAIN" } : { view: "rows", domain: r.domain, status: "", flag: "" });
-        tr.append(el("td", "mono", r.domain), el("td", "", r.rows), el("td", "", r.needs_fix), el("td", "", r.missing_url), el("td", "", r.missing_template), el("td", "mono", r.base_templates.join(", ")));
+        tr.classList.add("click"); tr.title = "Show this domain's documents"; tr.onclick = () => setFilter(r.domain === "(none)" ? { view: "rows", domain: "", status: "", flag: "MISSING_DOMAIN" } : { view: "rows", domain: r.domain, status: "", flag: "" });
+        tr.append(el("td", "mono", r.domain), el("td", "num", r.rows), el("td", "num ok", r.ok), el("td", "num chk", r.check), el("td", "num fix", r.needs_fix));
+        const sh = el("td"), bar = el("div", "share");
+        [["ok", r.ok, "OK"], ["chk", r.check, "to check"], ["fix", r.needs_fix, "to fix"]].forEach(([c, n, t]) => {
+          if (!n) return; const i = el("i", c); i.style.width = (n / r.rows * 100) + "%"; i.title = n + " " + t; bar.appendChild(i); });
+        sh.appendChild(bar); tr.appendChild(sh);
+        tr.append(el("td", "num", r.missing_url), el("td", "num", r.missing_template), el("td", "mono", r.base_templates.join(", ")));
         const s = el("td"); s.appendChild(statusBadge(r.status)); tr.appendChild(s);
       } else {
         tr.append(el("td", "mono", r.cached_domain), el("td", "mono", r.template), el("td", "", r.documents)); tr.appendChild(badges(el("td"), r.flags));
       }
       b.appendChild(tr);
     });
+    updateSel();
     $("empty").hidden = d.items.length > 0; $("empty").textContent = "Nothing matches the current search or filters.";
     $("pageinfo").textContent = d.matched.toLocaleString() + " matching · page " + d.page + " of " + d.pages;
-    $("prev1").disabled = d.page <= 1; $("next1").disabled = d.page >= d.pages; st.page = d.page;
+    $("prev1").disabled = d.page <= 1; $("next1").disabled = d.page >= d.pages; st.page = d.page; saveState();
   }
+
+  // ── selection ──
+  function updateSel() {
+    const sel = st.view === "rows" ? selRows : selDomains, n = sel.size, unit = st.view === "rows" ? "book" : "domain";
+    $("selinfo").textContent = n ? n.toLocaleString() + " " + unit + (n === 1 ? "" : "s") + " selected" + (st.view === "domains" ? " (all their books are included in the download)" : "") : "Tick rows to download just those " + unit + "s.";
+    $("selclear").disabled = !n; $("dlsel").disabled = !n;
+    $("dlsel").textContent = n ? "Download Selected (" + n.toLocaleString() + ")" : "Download Selected";
+  }
+  $("selclear").onclick = () => { (st.view === "rows" ? selRows : selDomains).clear(); saveState(); load(); };
+  $("selfiltered").onclick = async () => {
+    const p = new URLSearchParams({ view: st.view, q: st.q, status: st.status, flag: st.view === "domains" ? "" : st.flag, domain: st.domain });
+    try { const d = await api("/api/bta/" + rid + "/ids?" + p); const sel = st.view === "rows" ? selRows : selDomains; d.ids.forEach(i => sel.add(i)); saveState(); await load(); }
+    catch (e) { say("err", e.message); }
+  };
+  $("dlsel").onclick = async () => {
+    const body = st.view === "rows" ? { rows: [...selRows] } : { domains: [...selDomains] };
+    $("dlsel").disabled = true;
+    try {
+      const r = await fetch("/api/bta/" + rid + "/download-selected", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))).error) || ("Download failed (" + r.status + ")"));
+      const name = (/filename="?([^";]+)"?/.exec(r.headers.get("Content-Disposition") || "") || [])[1] || "Base_Template_Analysis_selected.xlsx";
+      const a = el("a"); a.href = URL.createObjectURL(await r.blob()); a.download = name.replace(/\.xlsx$/i, "_selected.xlsx");
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) { say("err", e.message); }
+    updateSel();
+  };
 
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => setFilter({ view: t.dataset.view, flag: "", status: "", domain: t.dataset.view === "rows" ? st.domain : "" }));
   let deb; $("q").oninput = () => { clearTimeout(deb); deb = setTimeout(() => { st.q = $("q").value; st.page = 1; build(); load(); }, 250); };

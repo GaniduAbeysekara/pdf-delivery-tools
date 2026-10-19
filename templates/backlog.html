@@ -178,6 +178,7 @@
         <div class="selbar">
           <span class="grow" id="selcount"></span>
           <button class="btn" id="analyze-sel" disabled>Analyze Selected URLs</button>
+          <button class="btn" id="bta-sel" title="Check these books against the Base Templates (domain, spider template, URL)">Base Template Analysis</button>
           <button class="btn ghost" id="dl-selected" disabled>Download Selected</button>
           <button class="btn ghost" id="sel-filtered">Select all in filtered view</button>
           <button class="btn ghost" id="sel-clear">Clear selection</button>
@@ -188,6 +189,7 @@
     </div>
 
     <div class="actions">
+      <button class="btn" id="bta-all" title="Check every book in the current filters against the Base Templates">Base Template Analysis - All Filtered</button>
       <button class="btn ghost" id="dl-filtered">Download Current Filtered Data</button>
       <button class="btn green" id="dl-report" disabled>Download Excel Report</button>
     </div>
@@ -442,7 +444,23 @@ function updateSelBar() {
   $('analyze-sel').disabled = n === 0;
   $('dl-selected').disabled = n === 0;
   $('dl-selected').textContent = n ? `Download Selected (${n.toLocaleString()})` : 'Download Selected';
+  $('bta-sel').textContent = n ? `Base Template Analysis (${n.toLocaleString()} selected)` : 'Base Template Analysis (all in view)';
 }
+/* selected books, or - when none are ticked - every book of the current filters (and view); mode 'filtered' ignores the view */
+async function sendToBta(btn, mode) {
+  const sel = mode === 'selected' && S.selected.size;
+  const p = params(true); if (mode === 'filtered') p.set('view', 'all');
+  btn.disabled = true; selMsg = ''; saveState();
+  try {
+    const r = await fetch(`/api/backlog/${S.rid}/send-to-base-templates`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(sel ? {rows: [...S.selected]} : {filters: p.toString()})});
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not send the books.');
+    window.location.href = '/base-template-analysis?transfer=' + encodeURIComponent(d.transfer_id);
+  } catch (e) { selMsg = e.message; updateSelBar(); showMsg('err', e.message); }
+  btn.disabled = false;
+}
+$('bta-sel').onclick = () => sendToBta($('bta-sel'), 'selected');
+$('bta-all').onclick = () => sendToBta($('bta-all'), 'filtered');
 $('sel-clear').onclick = () => { S.selected.clear(); selMsg = ''; updateSelBar(); saveState(); refresh(); };
 $('sel-filtered').onclick = async () => {
   try {

@@ -74,6 +74,7 @@
     <a class="sub" href="#backlog-downloads">Selecting and downloading</a>
     <a href="#urls">3. URL Analysis</a>
     <a class="sub" href="#urls-inputs">The three input tabs</a>
+    <a class="sub" href="#urls-find">Finding all the PDFs on one page</a>
     <a class="sub" href="#urls-what">What is checked</a>
     <a class="sub" href="#urls-dashboard">The results dashboard</a>
     <a class="sub" href="#urls-export">Downloads</a>
@@ -82,6 +83,8 @@
     <a class="sub" href="#templates-sheet">Keeping it in step with the Excel sheet</a>
     <a href="#analysis">5. Base Template Analysis</a>
     <a class="sub" href="#analysis-steps">Step by step</a>
+    <a class="sub" href="#analysis-domains">Seeing everything by domain</a>
+    <a class="sub" href="#analysis-select">Selecting and downloading</a>
     <a class="sub" href="#analysis-flags">The flags</a>
     <a class="sub" href="#analysis-report">The Excel report</a>
     <a href="#glossary">6. Reading the results</a>
@@ -114,6 +117,7 @@
         <li>Open <a href="http://localhost:8080">http://localhost:8080</a> in your browser. Use the sidebar to switch tools - you do not need to restart anything.</li>
         <li>To stop it, press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal window.</li>
       </ol>
+      <div class="note"><b>Your work stays when you switch tools.</b> Daily Backlog Dashboard, URL Analysis, Base Templates and Base Template Analysis each keep their results, filters, selections, chosen columns and typed or pasted text while you use another page, and show them again when you come back (also after a refresh). This lasts for as long as that browser tab stays open; closing the tab, or restarting the tool, clears it - the page then tells you that the earlier results are gone. An analysis that was still running keeps running while you are away and carries on showing its progress when you return.</div>
       <div class="note">The page is only available on your own computer (<code>127.0.0.1</code>). To use another port, set the <code>PORT</code> environment variable before starting.</div>
     </section>
 
@@ -203,6 +207,7 @@
       </table></div>
       <h3>Send books to URL Analysis</h3>
       <p>Select books and click <b>Analyze Selected URLs</b>. Their source links open in the URL Analysis tool, together with Document ID, title, domain, API Result and Book Type. Blank and duplicate links are dropped (the screen tells you how many).</p>
+      <p><b>Base Template Analysis.</b> Click <b>Base Template Analysis</b> in the bar above the table to check the <b>ticked books</b> (or, when none are ticked, every book in the current filters and view) against the Base Templates, and <b>Base Template Analysis - All Filtered</b> at the bottom to check every book in the current filters whatever the view. Each book's Document ID, Domain, Spider Template and URL are sent and the comparison opens already done. Books with no URL are kept, so they are flagged as <i>Missing URL</i>. The row numbers in the report are the books' positions in the backlog report; <b>Back to Daily Backlog Dashboard</b> returns you with the filters and ticks as you left them.</p>
     </section>
 
     <!-- ───────────────────────── 3 ───────────────────────── -->
@@ -210,15 +215,77 @@
       <h2>3. URL Analysis</h2>
       <p>One tool with four ways of giving it URLs (Paste URLs, Excel Batch Upload, From Daily Backlog, Page Source). Whichever you use, every URL is checked in exactly the same way and the results appear in the same dashboard and the same Excel file.</p>
 
-      <h3 id="urls-inputs">The three input tabs</h3>
+      <h3 id="urls-inputs">The input tabs</h3>
       <div class="table-wrap"><table>
         <tr><th>Tab</th><th>How to use it</th></tr>
         <tr><td>Paste URLs</td><td>Paste one URL per line (a column copied from Excel works), then click <b>Analyze URLs</b>. If you paste several columns copied from Excel (for example Document ID, Book Title, URL) the columns are recognised automatically. Repeated URLs are checked once. Lines that are not URLs are kept and reported as failed so nothing disappears silently.</td></tr>
         <tr><td>Excel Batch Upload</td><td>Choose an .xlsx or .xls file. The tool finds the URL column from the header (URL, Source URL, Source Link, Link, Document URL...) or from the cell contents and shows "detected automatically". If it is not sure, choose it from the <b>Select URL Column</b> list. Optionally pick the Document ID, Book Title, <b>Code</b> and <b>SpideringTemplate</b> columns (they are suggested automatically when the headers match). Click <b>Analyze Excel</b>. <b>Every row and every original column is kept</b> in the results.</td></tr>
         <tr><td>From Daily Backlog</td><td>Fills itself when you click <b>Analyze Selected URLs</b> in the backlog. Click <b>Analyze URLs</b>. The <b>&larr; Back to Daily Backlog</b> button returns you to the dashboard exactly as you left it.</td></tr>
         <tr><td>Page Source</td><td>For pages the tool cannot read itself, typically sites that show automated clients a "verifying you are human" page (status <b>BLOCKED</b>). Open the page in your own browser and wait until it has fully loaded. Then press <kbd>Ctrl</kbd>+<kbd>U</kbd>, <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd> (pages whose links appear only after JavaScript runs: press <kbd>F12</kbd> &rarr; Console and run <code>copy(document.documentElement.outerHTML)</code>; Chrome may ask you to type <code>allow pasting</code> first). Enter the page address, paste the source (or load a saved .html file) and click <b>Analyze page source</b>. The page is <b>not</b> requested again - the tool reads the links in what you pasted and then fetches only the document they point to, reporting pages, language and last modified as usual. Optional Document ID and Book Title are kept in the results.<br /><b>Shortcut:</b> on any BLOCKED row of the results table, click <b>Paste page source</b> to fix just that row without starting over.</td></tr>
+        <tr><td>Find PDFs on a Page</td><td>For one page that lists many PDFs, including pages where you have to click titles or sections open to see them. See "Finding all the PDFs on one page" below.</td></tr>
       </table></div>
+      <h4 style="margin:1rem 0 .3rem">Sites that refuse the tool (HTTP 403, Cloudflare)</h4>
+      <p>Some sites answer a script with <b>HTTP 403 - Access denied</b> but serve the same file to a person in a browser. Tick <b>Open blocked sites in a browser window</b> (under the input box, before you analyze) or, for an analysis that has already run, click <b>Retry blocked (n) in browser window</b>. For each refused URL the tool then opens a real Edge/Chrome window, loads the site like any visitor, and reads the file from inside that page - the same request the site's own pages make.</p>
+      <ul>
+        <li><b>Verification pages:</b> if the site shows a "verify you are human" page, the window is visible and a yellow banner on the dashboard says <i>"A browser window is waiting for you"</i>. Approve it in that window yourself; the tool waits (up to 3 minutes) and carries on. The tool never solves or disguises a check, and an approval is remembered for next time (the window uses its own profile in <code>data/browser_profile</code>).</li>
+        <li>Rows read this way carry the note <i>"The site refused the automated request, so the file was read through a real browser window"</i> and show the first answer (403) next to the final one (200). If the site still refuses, the row stays <b>BLOCKED</b> with the reason, and <b>Paste page source</b> remains available.</li>
+        <li>It is slower (one window, one file at a time) and only used for URLs the plain check could not read. It needs Microsoft Edge or Google Chrome on this computer and a desktop session. To run the window hidden (no approval possible), start the tool with the environment variable <code>URL_ANALYZER_BROWSER_HEADLESS=1</code>.</li>
+      </ul>
+      <h4 style="margin:1rem 0 .3rem">Download PDFs (a new folder, files named by Document ID)</h4>
+      <p>Click <b>Download PDFs</b> above the results table to save the documents themselves. Tick rows first to save only those; with nothing ticked, every analysed row is saved. In the window that opens you can type a folder to work in (leave it empty for the default, <code>output/pdf_downloads</code>); the tool always <b>creates a new folder inside it</b> named like <code>Daily Backlog_2026-10-08_143015</code> - it never writes into your Downloads folder or an existing folder.</p>
+      <ul>
+        <li>Each file is named with its <b>Document ID</b>: <code>DOC123.pdf</code>. Characters Windows does not allow in file names are replaced by <code>_</code>; the same ID twice gives <code>DOC123.pdf</code> and <code>DOC123_2.pdf</code>; a row without an ID is saved as <code>NoDocumentId_Row7.pdf</code>. Word files keep <code>.doc</code> / <code>.docx</code>.</li>
+        <li>What is saved: a direct document, or the single document found on a landing page. Pages with several documents, pages with none, and URLs that do not work are skipped, and <code>download_report.csv</code> in the folder lists every row with its status (Saved / Failed / Skipped), the file name, the size, how it was read, and the reason when it was not saved.</li>
+        <li>The same <b>Open blocked sites in a browser window</b> choice applies (it is ticked in the window when you ticked it above), so a site that refuses scripts is read the same way, and you approve any verification page in the browser window. The same address on several rows is downloaded once and copied for each Document ID. Files up to 200 MB are saved.</li>
+        <li><b>Skip:</b> while saving, every file being fetched right now is listed with its own <b>Skip</b> button (slow download, or waiting for a verification page you do not want to approve). Skipping ends that file at once, marks it <i>Skipped - Skipped by you</i> in the report, and the saving goes on with the others. During an analysis with the browser option, the yellow "waiting for you" banner has a <b>Skip this URL</b> button too; that row stays BLOCKED with the note.</li>
+        <li><b>Stop</b> ends the saving; files already written stay. <b>Open folder</b> shows the new folder in the file explorer when it finishes.</li>
+      </ul>
+      <div class="note"><b>Stopping.</b> While URLs are being analysed, <b>Stop analysis</b> (next to the percentage) ends the run: URLs already being checked finish, the rest are skipped, and everything analysed so far stays in the table and can be downloaded or sent on. <b>Re-analyze All</b> checks everything again. In <i>Find PDFs on a Page</i>, the <b>Stop</b> button under the form stops the search for PDFs; once the analysis has started, use <b>Stop analysis</b>.</div>
       <div class="note">Up to 5,000 URLs per run. Analysis runs in the background and the table fills as results arrive.</div>
+
+      <h3 id="urls-find">Finding all the PDFs on one page</h3>
+      <p>Use the <b>Find PDFs on a Page</b> tab when you have one address that leads to many PDFs - for example a code of laws with a list of titles, each of which opens into chapters and sections. You give the page address (and, if you want only part of the page, a <b>scope</b>); the tool collects every PDF link, then analyses each one: <b>page count, last modified date</b>, file size, language and whether it works. The results appear in the normal dashboard, and <b>Download Analysis Results</b> / <b>Download Selected</b> give the Excel file, with extra columns <i>Section Path</i> (where the PDF sits in the page's outline, e.g. <code>Title 1: Government &gt; General Provisions &gt; Chapter 1</code>) and <i>Source Page</i>.</p>
+      <ol>
+        <li>Paste the page address, for example <code>https://cnmilaw.gov/commonwealth-code</code>. A <code>#...</code> part at the end is ignored.</li>
+        <li><b>Scope (optional)</b> - a CSS selector for the links you want. Example, only the PDFs under the first title:<br /><code>#cmctree&gt;.tlist&gt;li:nth-of-type(1) a[data-pdf*='.pdf']</code><br />
+            Leave it empty to take every PDF link on the page. Tips: in your browser press <kbd>F12</kbd>, right-click a link in the Elements tab and choose <b>Copy &rarr; Copy selector</b>; the address can be in <code>href</code> or in another attribute such as <code>data-pdf</code> - if the scope names the attribute (as above) the tool reads that one.</li>
+        <li>Click <b>Find and analyze PDFs</b>. The progress line shows how many sections have been opened and how many PDF links have been found so far; then the analysis starts by itself. <b>Stop</b> cancels a search that is still looking (it finishes the step in progress, usually a few seconds).</li>
+      </ol>
+      <p><b>How collapsed sections are handled.</b> The tool first reads the page's HTML. If the page has collapsed sections (a title you click to expand, an accordion, a <code>&lt;details&gt;</code> block) or shows no PDF links at all, it opens the page in a hidden browser and does what you would do: it clicks every collapsed section, waits for the content to load, and repeats until nothing new opens. <b>Only the sections inside the scope are opened</b> - with the example scope, Titles 2, 3, ... are never touched. Then the finished page is read with the same scope. For the CNMI Commonwealth Code, Title 1 alone opens 246 sections in about half a minute and yields 1,294 PDFs.</p>
+      <p><b>Pages whose content is in a frame (iframe).</b> Some sites show everything inside an <code>&lt;iframe&gt;</code> (for example law.go.kr: the page itself is an empty shell and the list of attachments is inside the frame). The tool reads the frames too: a scope such as <code>ul li a:nth-of-type(3)</code> is applied to the page <b>and to each frame inside it</b>, and collapsed sections inside a frame are opened there. Links are resolved against the frame's own address, so relative links like <code>flDownload.do?flSeq=...</code> work. Two things help it recognise PDF links that have no <code>.pdf</code> in the address: if you give a scope, every link it selects is taken; if you give none, links that say they are a PDF (the word "PDF" in the text, a class, or an icon's description such as <i>PDF파일 다운로드</i>) are taken. A link with only an icon is named after its list item or table row (for example "[별표 1] 업무처리기간"). Titles in any language (Korean, Chinese, Arabic ...) are kept.</p>
+      <p><b>Pages that load their links late.</b> Some pages (law.go.kr is one) sit idle for several seconds before their scripts ask for the list, so a page that looks "finished" may not be. When your scope has found nothing yet, the tool keeps waiting - up to 30 seconds (12 seconds when there is no scope) - for it to match, and then waits for the rest of the list. If it still matches nothing, the result says "The scope matched nothing, even after waiting 30 seconds". Frames on another website, frames inside frames, and <code>srcdoc</code> frames are read as well.</p>
+      <h4 style="margin:.9rem 0 .3rem">Example: only one title of a long list</h4>
+      <p>On <code>https://cnmilaw.gov/commonwealth-code</code> the titles are the entries of the outline. To get only <b>Title 9: Vehicle Code</b> (269 PDFs), use the scope <code>#cmctree&gt;.tlist&gt;li:nth-of-type(9) a[data-pdf*='.pdf']</code> - "the 9th title". A more robust way to write the same thing is by the title's own id, which does not change if titles are added: <code>#cmctree&gt;.tlist&gt;li[data-id='7305'] a[data-pdf*='.pdf']</code>. Only that title is opened (47 sections in about 20 seconds); the other titles are never touched.</p>
+
+      <h4 style="margin:.9rem 0 .3rem">Following links through several levels</h4>
+      <p>Some sites need several steps: a list of departments, each with agencies, each with rules, each rule page holding the PDF. Click <b>+ Add a level</b> under the scope, once per extra step. The scope of level 1 selects links to <b>pages to open</b>; on every one of those pages the scope of level 2 selects links; and so on - <b>the links of the last level are the PDFs</b>. Example (Colorado Code of Regulations):</p>
+      <ul>
+        <li>Page: <code>https://www.sos.state.co.us/CCR/NumericalDeptList.do</code>; level 1 scope: <code>tr:nth-of-type(170)~*:not(tr:nth-of-type(194)~*) a</code> (the agencies of one department - 23 pages)</li>
+        <li>Level 2 scope: <code>.rowEven td a</code> (the rules listed on each agency page)</li>
+        <li>Level 3 scope: <code>#application&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;table:nth-of-type(3) tr&gt;td:nth-of-type(1) a:nth-of-type(1)</code> (the PDF link on each rule page)</li>
+      </ul>
+      <p>Each PDF in the results carries the titles of the links that led to it in <i>Section Path</i> (for example <code>Mental Health Services &gt; 2 CCR 501-1</code>) and the page it was found on in <i>Source Page</i>. <b>Maximum pages to open</b> (Advanced, default 300) limits how many pages levels 2 and up may open. One browser is shared by all pages, and the tool waits between requests to the same site, so 60 pages take a few minutes. A page that cannot be read is skipped and reported; the crawl goes on.</p>
+      <p><b>Selectors copied from other tools.</b> A run of <code>&gt;</code> such as <code>#application&gt;&gt;&gt;&gt;table</code> is not valid CSS; it is read as "somewhere below" (an ordinary descendant), so the selector above works as written.</p>
+      <p><b>Links with no address of their own.</b> A link such as <code>&lt;a href="javascript:void(0)" onclick="OpenRuleWindow('5421','2 CCR 501-1')"&gt;</code> has its address built by the page's script. When your scope selects such links, the tool clicks each of them in the browser and records the address the page tries to open (<code>.../GenerateRulePdf.do?ruleVersionId=5421&amp;fileName=...</code>), without downloading anything there; the analysis that follows then fetches it and reports whether it is really a PDF. Addresses written out in the click handler (<code>window.open('/files/a.pdf')</code>) are read directly. Links that lead nowhere are counted in the notes.</p>
+
+      <h4 style="margin:.9rem 0 .3rem">Pages with their own crawler</h4>
+      <p>Some pages are too particular for the generic search. When the address you type is one of them, a blue panel appears under the address saying <b>"Recognised page"</b>, and a dedicated crawler is used (the scope and the other options below do not apply). Currently:</p>
+      <ul>
+        <li><b>Superfinanciera - Circular Básica Jurídica</b> (<code>superfinanciera.gov.co/publicaciones/10115528/circular-basica-juridica-ce-00625/</code>): its Partes, Títulos and Capítulos are inside an iframe that loads on demand. The tool opens each Capítulo in the browser and lists <b>every attachment of every Capítulo</b> (PDF, DOC/DOCX, XLS/XLSX, ...), with the path <i>Parte &gt; Título &gt; Capítulo</i> in <i>Section Path</i>, the real download address, the file type, and the site's own numbers in <i>Site IDs</i>. It never uses the "DESCARGAR" buttons and takes about 4 minutes per Parte (12 for all three).</li>
+      </ul>
+      <p>Options of that panel: <b>Only this Parte</b> (faster), and <b>Read the files</b>. The attachment addresses only work inside the site's own session, so the normal analysis cannot fetch them. Without "Read the files" the rows are listed with status <i>Unknown</i> and the explanation, not as failures. With it, the tool downloads each attachment <b>into memory, inside the same browser session</b> (exactly what clicking it does; nothing is saved) and fills in <b>file size, page count (PDF and DOCX), language and last modified date</b>; .doc and .xls files give size and date but no page count.</p>
+      <p><b>Advanced options.</b></p>
+      <ul>
+        <li><b>How to read the page</b> - Automatic (recommended), <i>Page HTML only</i> (never uses the browser), or <i>Always use the browser</i>.</li>
+        <li><b>Maximum pages to open</b> - for several levels: the most pages (levels 2 and up) that may be opened. Default 300, at most 1,500.</li>
+        <li><b>Maximum PDFs to analyse</b> - default 3,000, at most 5,000. The Excel/dashboard limit is the same as for any other input.</li>
+        <li><b>Extra "click to open" selector</b> - only needed if some sections are not opened by themselves (the tool already recognises <code>aria-expanded</code> buttons, <code>&lt;details&gt;</code>, and common tree and accordion toggles).</li>
+        <li><b>"Next page" button selector</b> - for lists split over several pages, or "Load more" buttons: the tool clicks it again and again and merges what it finds, until it disappears or nothing changes (at most 30 pages).</li>
+        <li><b>Also take Word files</b> - includes .doc and .docx.</li>
+        <li><b>Strict</b> - keep only addresses that end in .pdf (or .doc/.docx). Off by default: a link that your scope selects is kept even when its address has no <code>.pdf</code> (many sites use addresses such as <code>download.do?id=7</code>), and the analysis then reports what each one really is - a link that is not a PDF shows up with another <i>Content Type</i>.</li>
+      </ul>
+      <div class="note"><b>Needs Playwright.</b> Opening collapsed sections uses a browser. Run <code>pip install playwright</code> once (it drives the Microsoft Edge or Google Chrome already installed - no browser is downloaded). Without it the tab still works for pages whose links are already in the HTML, and says so when it cannot open sections. The page's own requests are checked like every other request the tool makes: private and local addresses are refused, images, video and fonts are not loaded, and nothing is downloaded by the browser (the PDFs are fetched by the normal analysis).</div>
+      <div class="note"><b>Speed.</b> The tool waits between requests to the same website (<code>request: delay</code> in <code>config.yaml</code>, 0.5 seconds), so 1,000 PDFs take roughly 15-25 minutes. You can leave the page; your search and results are kept (see "Your work stays when you switch tools").</div>
 
       <h3 id="urls-what">What is checked for each URL</h3>
       <ol>
@@ -299,9 +366,26 @@
         <li>Either open <b>Base Template Analysis</b> in the sidebar and choose your file, <b>or</b> run an analysis on the URL Analysis page and click <b>Send to Base Template Analysis</b> - the rows arrive already compared (skip to step 4). On that page <b>Compare again</b> repeats the comparison with the latest Base Templates; the row numbers are positions in the URL Analysis results table.</li>
         <li>Check the column choices. The tool finds the URL, Spider Template, Domain and Document ID columns by their headings (even when title rows sit above them); change any that are wrong. <b>URL</b> and <b>Spider Template</b> are required; if there is no Domain column the domain is taken from the URL.</li>
         <li>Click <b>Compare with Base Templates</b>. The cards show how many documents need fixing; click a card to see just those rows.</li>
-        <li>Work through the <b>Documents</b> tab (one row per document, with its <b>Row</b> number in your file), the <b>Domains</b> tab (one line per domain - click one to see its documents) and the <b>Base Templates</b> tab (the other side of the join).</li>
+        <li>Work through the <b>Books</b> tab (one row per book, with its <b>Row</b> number in your file), the <b>By Domain</b> tab and the <b>Base Templates</b> tab (the other side of the join). See "Seeing everything by domain" below.</li>
         <li>Fix the problems at the source: correct your file, or use <b>Add base template</b> on a row to open the Base Templates form with the domain filled in. Then upload / compare again.</li>
       </ol>
+      <h3 id="analysis-domains">Seeing everything by domain</h3>
+      <p>The <b>By Domain</b> tab lists every domain in your file with, for each one, <b>how many books</b> it has and how many of them are <b>OK</b>, <b>Check</b> (information flags only) and <b>Needs fix</b>, a colour bar showing that split, how many are missing a URL or a Spider Template, which Base Template(s) it was joined to, and a <b>Status</b>:</p>
+      <ul>
+        <li><b>OK</b> - every book of the domain is fine.</li>
+        <li><b>Check</b> - nothing to fix, but some books only matched the Base Template after ignoring <code>www.</code>.</li>
+        <li><b>Needs fix</b> - the domain has a Base Template, but some of its books are missing a URL or Spider Template.</li>
+        <li><b>No Base Template</b> - no Base Template has this domain as its Cached Domain.</li>
+        <li><b>No domain</b> - books with no domain at all.</li>
+      </ul>
+      <p>The cards at the top give the same numbers for the whole file: books in the file / to fix / to check / OK, and domains / OK / to check / with books to fix / with no Base Template. Click a card to filter the list to it, and click a domain to see its books. Domains with the most books to fix are listed first.</p>
+      <h3 id="analysis-select">Selecting and downloading</h3>
+      <ul>
+        <li><b>Download All Data</b> - the whole comparison: every book, every domain, every Base Template.</li>
+        <li><b>Tick rows</b> (in the Books tab, or in the By Domain tab) and click <b>Download Selected (N)</b> - only those. Ticking a domain includes <i>all</i> of its books. <b>Select all filtered</b> ticks everything matching the current search and filters (across all pages); <b>Clear selection</b> empties it.</li>
+        <li><b>Books needing a fix only</b> and <b>Current filter</b> are one-click shortcuts for the two most common selections.</li>
+        <li>A selected-data download is a complete report of just those books: its Review, Needs Fix, Domains, Base Templates Review and SUMMARY sheets are all recalculated for the selection, and the SUMMARY says how many of the total books it covers. Your ticks are kept while you visit other tools.</li>
+      </ul>
       <h3 id="analysis-flags">The flags</h3>
       <div class="table-wrap"><table>
         <tr><th>Flag</th><th>Applies to</th><th>Meaning</th></tr>
@@ -315,7 +399,7 @@
       </table></div>
       <p>A document is <b>Needs fix</b> when it has any of the first four flags, <b>Check</b> when it has only the information flag, and <b>OK</b> when it has none.</p>
       <h3 id="analysis-report">The Excel report</h3>
-      <p><b>Download full report</b>, <b>Download rows needing fix</b> or <b>Download current filter</b> give one workbook with: <b>SUMMARY</b> (counts, columns used and what each flag means), <b>Review</b> (every document with Status, a readable Flags column and one red YES column per flag, plus the Base Template(s) it was joined to), <b>Needs Fix</b> (only the rows to fix), <b>Domains</b> and <b>Base Templates Review</b>. The <b>Source Row</b> column is the row number in your original file, so each problem is easy to find. The report is not saved on the server - download it while the page is open (results are kept for two hours).</p>
+      <p>Every download is one workbook with: <b>SUMMARY</b> (counts, columns used and what each flag means), <b>Review</b> (every document with Status, a readable Flags column and one red YES column per flag, plus the Base Template(s) it was joined to), <b>Needs Fix</b> (only the rows to fix), <b>Domains</b> (books, OK, Check and Needs fix for each domain) and <b>Base Templates Review</b>. The <b>Source Row</b> column is the row number in your original file, so each problem is easy to find. The report is not saved on the server - download it while the page is open (results are kept for two hours).</p>
     </section>
 
     <!-- ───────────────────────── 6 ───────────────────────── -->
@@ -370,6 +454,21 @@
       <p>The result is written to an <code>output</code> folder next to the input file (<code>&lt;name&gt;_analyzed.xlsx</code>); the input file is never changed.</p>
       <h3>Build the daily backlog workbook</h3>
 <pre><code>.\run.bat daily-workflow --ui "StartPointStatus-01-Oct-2026.csv" --powerbi "Details Table.xlsx"</code></pre>
+      <h3 id="cli-cbj">Attachments of the Superfinanciera "Circular Básica Jurídica" (Parte &rarr; Título &rarr; Capítulo)</h3>
+      <p>The page <code>superfinanciera.gov.co/publicaciones/10115528/circular-basica-juridica-ce-00625/</code> shows its content in an iframe that builds everything on demand, so it has its own crawler. It drives the real page in a browser (Playwright, using the installed Edge or Chrome):</p>
+<pre><code>python scripts\cbj_attachments.py --out output\cbj_attachments.xlsx
+python scripts\cbj_attachments.py --parte 1 --max-capitulos 3 --headed     # a quick look, with the browser visible
+python scripts\cbj_attachments.py --read-files                             # also read each file (in memory) for size, pages, date</code></pre>
+      <p>The same crawler is built into <b>Find PDFs on a Page</b> (paste the page address there and its results appear in the normal dashboard); the script is for running it without the web page.</p>
+      <ul>
+        <li>It opens every Parte, every Título and every Capítulo in the sidebar and lists <b>all attachments of each Capítulo</b> (PDF, DOC/DOCX, XLS/XLSX or anything else), with the file name, type and the <b>real download address</b> (<code>.../apiCircularBasica/descargarAnexo/&lt;id&gt;</code>). It never uses the "DESCARGAR" buttons.</li>
+        <li>It waits for conditions, not fixed delays: the clicked Capítulo must be the selected one and the site's own requests must have finished and stayed quiet.</li>
+        <li>Each attachment is found three ways and cross-checked: from the site's own attachment data, from the page and every iframe in it, and by clicking it and recording the request the page makes (that request is cancelled - nothing is downloaded). The <i>Found In</i> and <i>Verified By Click</i> columns show this.</li>
+        <li>A Capítulo that fails is retried (<code>--retries</code>, default 2), logged to <code>logs\cbj_attachments.log</code>, listed on the <i>Errors</i> sheet, and the crawl continues.</li>
+        <li>The workbook has the sheets <i>Attachments</i> (one row per Capítulo and file, with Parte / Título / Capítulo), <i>Unique URLs</i> (each URL once, with every place it appears), <i>Capitulos</i>, <i>Errors</i> and <i>Summary</i>; a <code>.json</code> copy is written next to it. The same file in two Capítulos has a row for each, so no hierarchy is lost.</li>
+        <li>The site's own menu lists "Título III. Sociedades comisionistas de bolsa de valores" twice under Parte III. Rows are told apart by the numbers the site itself uses (<i>Site IDs</i>, written Parte/Título/Capítulo): a repeated row with the same numbers is recorded on the <i>Capitulos</i> sheet as <i>duplicate</i> and not read or listed twice, while a repeated label with different numbers would be read as its own Título (marked <i>Title Row # 2</i>).</li>
+      </ul>
+      <div class="note">The download addresses only work inside the viewer's own session: requested directly they answer <code>401</code>. They identify the files; to fetch them use the site's page, or ask for the crawler to be extended to save the files.</div>
     </section>
 
     <!-- ───────────────────────── 8 ───────────────────────── -->
@@ -397,7 +496,7 @@
         <tr><td>Book Types differ from what you expected</td><td>Book Type is the <code>BookCategory</code> from the CSV. Blank values show as <b>Unknown</b>; books missing from the CSV show as <b>Unmatched</b>. Neither is in the action lists.</td></tr>
         <tr><td>The Excel report button stays grey</td><td>It takes about a minute for a large CSV. If a message appears instead, read it - for example a file open in Excel must be closed first.</td></tr>
         <tr><td>Many URLs are BLOCKED (403/401/429)</td><td>The website refuses automated requests; the address may still work in a browser. Try again later or with fewer URLs at once. This is a limit of the website, not of the tool.</td></tr>
-        <tr><td>Status <b>BLOCKED</b> with "Blocked by bot protection (Radware / Cloudflare...)"</td><td>The site answered with a "verify you are a browser" page instead of the real page (the HTTP status can still be 200). The tool cannot see the page's links, so it deliberately does <b>not</b> say "No Document Link" - the Document Link Type is left empty. Open the page in a normal browser to check it. <b>Best fix: click "Paste page source" on that row</b> (or use the Page Source tab) and paste the page's HTML copied from your own browser. Alternatively try <code>browser.enabled: true</code> in <code>config.yaml</code> (optional Playwright fallback) - it works on some sites but not all, and the tool does not try to defeat captchas. For sites you maintain or rely on regularly, ask the site owner to allow-list the tool.</td></tr>
+        <tr><td>Status <b>BLOCKED</b> with "Blocked by bot protection (Radware / Cloudflare...)"</td><td>The site answered with a "verify you are a browser" page instead of the real page (the HTTP status can still be 200). The tool cannot see the page's links, so it deliberately does <b>not</b> say "No Document Link" - the Document Link Type is left empty. Open the page in a normal browser to check it. <b>Best fix: click "Paste page source" on that row</b> (or use the Page Source tab) and paste the page's HTML copied from your own browser. Alternatively tick <b>Open blocked sites in a browser window</b> and retry (a page that only shows a verification page works once you approve it in the window), or try <code>browser.enabled: true</code> in <code>config.yaml</code> (optional Playwright fallback) - it works on some sites but not all, and the tool does not try to defeat captchas. For sites you maintain or rely on regularly, ask the site owner to allow-list the tool.</td></tr>
         <tr><td>HTTP 202 and the note "bot-protection page"</td><td>The site returned a holding page instead of the real content. Open the address in a browser to confirm.</td></tr>
         <tr><td>A result looks out of date and is marked "cached"</td><td>Results are reused for one hour. Click <b>Re-analyze</b> for a live check.</td></tr>
         <tr><td>"Document is larger than 50 MB"</td><td>The file was not downloaded. Raise <code>processing.max_pdf_bytes</code> if you need page counts for big files.</td></tr>

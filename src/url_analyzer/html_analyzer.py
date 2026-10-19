@@ -286,7 +286,8 @@ def document_base_url(html: str, page_url: str) -> str:
 # That page has no document links, which must NOT be reported as "this page has no documents".
 _BOT_PROTECTION = [
     ("Radware", re.compile(r"<title>\s*radware|__uzdbm_|perfdrive\.com|shieldsquare", re.I)),
-    ("Cloudflare", re.compile(r"<title>\s*(?:just a moment|attention required)|cf-browser-verification|challenge-platform|cf_chl_", re.I)),
+    # NB: /cdn-cgi/challenge-platform/scripts/jsd/main.js is Cloudflare's passive beacon on ORDINARY pages; only /challenge-platform/h/ is a challenge
+    ("Cloudflare", re.compile(r"<title>\s*(?:just a moment|attention required)|cf-browser-verification|challenge-platform/h/|cf_chl_", re.I)),
     ("Imperva/Incapsula", re.compile(r"_incapsula_resource|incapsula incident id", re.I)),
     ("Akamai", re.compile(r"errors\.edgesuite\.net|akamai.{0,40}reference\s*#", re.I | re.S)),
     ("DataDome", re.compile(r"captcha-delivery\.com|datadome", re.I)),

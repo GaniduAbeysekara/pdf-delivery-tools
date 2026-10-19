@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from typing import Callable, Iterable
 from urllib.parse import urlparse
@@ -24,6 +25,7 @@ from ..html_analyzer import (detect_bot_protection, document_base_url, find_cand
                              find_embedded_documents)
 from ..logger import log
 from .browser_fallback import PlaywrightRenderer
+from .browser_fetch import BrowserFetcher, BrowserFile, default_fetcher, filename_of
 from .document_analyzer import (DIRECT_TYPES, detect_content_type, disposition_filename, human_size,
                                 inspect_document, parse_http_date)
 from .http_analyzer import (CHUNK, HTTP_MESSAGES, REDIRECT_CODES, AnalyzerSettings, HTTPAnalyzer, header)
@@ -39,6 +41,40 @@ MAX_PROBES = 12         # unverified "download" style links checked per landing 
 MAX_LISTED_LINKS = 200
 MAX_SUPPLIED_HTML = 5 * 1024 * 1024
 Records = Iterable["BookRecord | dict"]
+
+
+SAVE_DEADLINE = 600     # seconds allowed to save one file (large files over slow links)
+BROWSER_NOTE = "The site refused the automated request, so the file was read through a real browser window"
+
+
+class _BrowserResponse:
+    """What the browser read, shaped like the HTTP response the rest of the engine inspects."""
+    def __init__(self, bf: BrowserFile):
+        self.status_code = 200
+        self.final_url = bf.final_url
+        self.headers = {"Content-Type": bf.content_type, "Content-Disposition": bf.disposition,
+                        "Content-Length": str(bf.size) if bf.size else ""}
+        self._data = bf.data
+
+    def iter_content(self, n: int = CHUNK):
+        for i in range(0, len(self._data), n):
+            yield self._data[i:i + n]
+
+    def close(self) -> None:
+        pass
+
+
+@dataclass
+class FetchedDocument:
+    ok: bool = False
+    data: bytes = b""
+    content_type: str = ""
+    ext: str = ""
+    final_url: str = ""
+    filename: str = ""
+    via: str = "direct"
+    http_status: int | None = None
+    error: str = ""
 
 
 class RateLimited(Exception):
@@ -67,15 +103,34 @@ class URLAnalyzer:
     def __init__(self, settings: AnalyzerSettings | None = None,
                  session_factory: Callable[[], requests.Session] | None = None,
                  resolver: Callable[[str], list[str]] | None = None,
-                 renderer=None):
+                 renderer=None, browser_fetcher: BrowserFetcher | None = None):
         self.s = settings or AnalyzerSettings.from_config()
         self.http = HTTPAnalyzer(self.s, session_factory, resolver)
         self.renderer = renderer or (PlaywrightRenderer(self.s.read_timeout) if self.s.browser_fallback else None)
+        self.browser_fetcher = browser_fetcher       # None -> the shared one, created when a blocked site first needs it
         self._cache: dict[tuple[str, str], tuple[float, URLAnalysisResult]] = {}
         self._cache_lock = threading.Lock()
 
     def validate(self, url: str) -> str:
         return self.http.validate(url)
+
+    def browser(self) -> BrowserFetcher:
+        if self.browser_fetcher is None:
+            self.browser_fetcher = default_fetcher(validate=self.http.validate)
+        return self.browser_fetcher
+
+    @staticmethod
+    def _refused(resp) -> bool:
+        """The site turned the automated request away (Cloudflare and similar), so a real browser may get in."""
+        code = resp.status_code
+        return code in (401, 403) or (code == 503 and "cloudflare" in header(resp.headers, "Server").lower())
+
+    def _through_browser(self, url: str, max_bytes: int, stop=None):
+        """(replacement response, '') when a browser window could read the refused URL, else (None, why not)."""
+        bf = self.browser().fetch(url, max_bytes=max_bytes, stop=stop)
+        if bf.ok and (bf.data or bf.too_big):
+            return _BrowserResponse(bf), ""
+        return None, bf.error or "the browser could not read it either"
 
     # ── cache ───────────────────────────────────────────────────────────────
     def _cache_key(self, url: str, kind: str = "") -> tuple[str, str]:
@@ -98,29 +153,29 @@ class URLAnalyzer:
             self._cache.clear()
 
     # ── single URL ──────────────────────────────────────────────────────────
-    def analyze(self, url: str, force: bool = False) -> URLAnalysisResult:
+    def analyze(self, url: str, force: bool = False, use_browser: bool = False) -> URLAnalysisResult:
         """Analyse one URL. Never raises; failures are reported in the result.
         Cached results are returned with `cached=True` unless `force` asks for a fresh check."""
         url = (url or "").strip()
-        key = self._cache_key(url)
+        key = self._cache_key(url, "|browser" if use_browser else "")
         if not force:
             hit = self._cache_get(key)
             if hit:
                 res = hit.with_record(BookRecord(url=url))
                 res.cached = True
                 return res
-        result = self._analyze_uncached(url)
+        result = self._analyze_uncached(url, use_browser=use_browser)
         result.analyzed_at, result.cached = _now(), False
         self._cache_put(key, result)
         return result
 
-    def _analyze_document(self, url: str, deadline: float) -> URLAnalysisResult:
+    def _analyze_document(self, url: str, deadline: float, use_browser: bool = False) -> URLAnalysisResult:
         """Analyse a document linked from a landing page (never follows links again)."""
-        key = self._cache_key(url, "|doc")
+        key = self._cache_key(url, "|doc|browser" if use_browser else "|doc")
         hit = self._cache_get(key)
         if hit:
             return hit
-        res = self._analyze_uncached(url, follow=False, nested=True, deadline=deadline)
+        res = self._analyze_uncached(url, follow=False, nested=True, deadline=deadline, use_browser=use_browser)
         res.analyzed_at = _now()
         self._cache_put(key, res)
         return res
@@ -140,7 +195,7 @@ class URLAnalyzer:
         time.sleep(max(0.0, min(seconds, deadline - time.monotonic())))
 
     def _analyze_uncached(self, url: str, follow: bool = True, nested: bool = False,
-                          deadline: float | None = None) -> URLAnalysisResult:
+                          deadline: float | None = None, use_browser: bool = False) -> URLAnalysisResult:
         def fresh() -> URLAnalysisResult:
             return URLAnalysisResult(url=url, domain=extract_domain(url) if url else "")
 
@@ -157,7 +212,7 @@ class URLAnalyzer:
                 r = fresh()
                 last = attempt == attempts - 1
                 try:
-                    return self._fetch_and_inspect(url, r, deadline, follow, last)
+                    return self._fetch_and_inspect(url, r, deadline, follow, last, use_browser)
                 except RateLimited as e:
                     r.status, r.error = "BLOCKED", "HTTP 429 - Rate limited"
                     log.warning("429 for %s - waiting %.1fs", url, e.seconds)
@@ -176,9 +231,19 @@ class URLAnalyzer:
         return r
 
     def _fetch_and_inspect(self, url: str, r: URLAnalysisResult, deadline: float, follow: bool,
-                           last_attempt: bool) -> URLAnalysisResult:
+                           last_attempt: bool, use_browser: bool = False) -> URLAnalysisResult:
         log.info("Processing: %s", url)
         resp, first_status, hops, final_url = self.http.request(url, deadline, r.notes)
+        refused_why = ""
+        if self._refused(resp):
+            if use_browser:
+                alt, refused_why = self._through_browser(final_url, self.s.max_download_bytes)
+                if alt is not None:
+                    resp.close()
+                    resp, final_url = alt, alt.final_url or final_url
+                    r.notes.append(BROWSER_NOTE)
+            elif resp.status_code in (401, 403):
+                r.notes.append("The site may block automated requests - tick 'Open blocked sites in a browser window' and re-analyze to read it through a real browser")
         try:
             code = resp.status_code
             r.http_status, r.final_status, r.redirects, r.final_url = first_status, code, hops, final_url
@@ -197,6 +262,8 @@ class URLAnalyzer:
                            else f"HTTP {code} - {label}")
                 r.status = "NOT_WORKING" if code in REDIRECT_CODES else classify_status(code)
                 r.url_type, r.analysis_status = "NOT_WORKING", "Failed"
+                if refused_why:
+                    r.error += f" (a browser window was tried too: {refused_why})"
                 log.info("Status: %s -> %s", code, r.status)
                 return r
             r.status = "WORKING"
@@ -257,13 +324,75 @@ class URLAnalyzer:
             log.info("Status: %s | URL type: %s", code, r.url_type)
 
             if html_text is not None and follow:
-                self._landing(r, html_text, final_url, deadline)
+                self._landing(r, html_text, final_url, deadline, use_browser=use_browser)
             if (not r.direct_document and ext in ("pdf", "doc", "docx") and r.content_type in ("HTML", "Other")
                     and r.document_link_type in ("", "NONE")):
                 self._partial(r, f"URL looks like a .{ext} file but the server returned {r.content_type}")
             return r
         finally:
             resp.close()
+
+    # ── saving a document ───────────────────────────────────────────────────
+    def fetch_document(self, url: str, use_browser: bool = False, stop=None) -> FetchedDocument:
+        """The bytes of the document at `url` (PDF / DOC / DOCX), for saving. Never raises; failures are in `error`.
+        A site that refuses the automated request is read through a real browser window when `use_browser` is on."""
+        out = FetchedDocument()
+        err = self.http.validate(url)
+        if err:
+            out.error = err
+            return out
+        deadline = time.monotonic() + SAVE_DEADLINE
+        notes: list[str] = []
+        host = (urlparse(url).hostname or "").lower()
+        try:
+            with self._host_slot(host, False):
+                resp, first, _, final = self.http.request(url, deadline, notes)
+                out.http_status = resp.status_code
+                if self._refused(resp):
+                    why = ""
+                    if use_browser:
+                        alt, why = self._through_browser(final, self.s.max_save_bytes, stop)
+                        if alt is not None:
+                            resp.close()
+                            resp, final, out.via, out.http_status = alt, alt.final_url or final, "browser", 200
+                    if resp.status_code >= 400:
+                        resp.close()
+                        out.error = f"HTTP {resp.status_code} - {HTTP_MESSAGES.get(resp.status_code, 'Request failed')}" + (
+                            f" (a browser window was tried too: {why})" if why else
+                            ". The site blocks automated requests - tick 'Open blocked sites in a browser window'.")
+                        return out
+                try:
+                    if resp.status_code >= 400:
+                        out.error = f"HTTP {resp.status_code} - {HTTP_MESSAGES.get(resp.status_code, 'Server error' if resp.status_code >= 500 else 'Request failed')}"
+                        return out
+                    ct_raw = header(resp.headers, "Content-Type")
+                    disp = disposition_filename(header(resp.headers, "Content-Disposition"))
+                    it = resp.iter_content(CHUNK)
+                    head = next(it, b"") or b""
+                    out.content_type = detect_content_type(ct_raw, final, head, disp)
+                    out.final_url = final
+                    if out.content_type not in DIRECT_TYPES:
+                        out.error = ("The address returned a web page, not a document" if out.content_type == "HTML"
+                                     else f"The address did not return a PDF or Word document ({out.content_type or 'unknown type'})")
+                        return out
+                    clen_raw = header(resp.headers, "Content-Length").strip()
+                    if clen_raw.isdigit() and int(clen_raw) > self.s.max_save_bytes:
+                        out.error = f"The file is larger than {human_size(self.s.max_save_bytes)} - not saved"
+                        return out
+                    data, truncated = self.http.read(it, head, self.s.max_save_bytes, deadline, stop)
+                    if truncated:
+                        out.error = f"The file is larger than {human_size(self.s.max_save_bytes)} - not saved"
+                        return out
+                    out.data, out.ok = data, True
+                    out.ext = {"PDF": ".pdf", "DOC": ".doc", "DOCX": ".docx"}[out.content_type]
+                    out.filename = disp or url_extension(final) and urlparse(final).path.rsplit("/", 1)[-1]
+                    return out
+                finally:
+                    resp.close()
+        except Exception as e:
+            message, _ = self.http.failure_message(e)
+            out.error = message
+            return out
 
     # ── landing pages ───────────────────────────────────────────────────────
     def _extract_links(self, html: str, base_url: str, deadline: float, depth: int = 0) -> tuple[list[str], dict[str, set[str]]]:
@@ -358,9 +487,18 @@ class URLAnalyzer:
         finally:
             resp.close()
 
-    def _landing(self, r: URLAnalysisResult, html: str, final_url: str, deadline: float, supplied: bool = False) -> None:
+    def _landing(self, r: URLAnalysisResult, html: str, final_url: str, deadline: float, supplied: bool = False,
+                 use_browser: bool = False) -> None:
         urls, how = self._extract_links(html, final_url, deadline)
         shield = "" if urls else detect_bot_protection(html)
+        if shield and use_browser and not supplied:                # a verification page: a real browser window tries (the person approves it)
+            bf = self.browser().fetch(final_url, max_bytes=SMALL_BODY_CAP)
+            if bf.ok and bf.html:
+                urls, how = self._extract_links(bf.html, final_url, deadline)
+                shield = "" if urls else detect_bot_protection(bf.html)
+                r.notes.append(BROWSER_NOTE.replace("file was", "page was"))
+            elif bf.error:
+                r.notes.append(f"A browser window was tried too: {bf.error}")
         if not urls and self.renderer is not None and not supplied:
             rendered = self.renderer.render(final_url)
             if rendered:
@@ -401,14 +539,14 @@ class URLAnalyzer:
             r.document_link_type = "NONE"
         elif len(urls) == 1:
             r.document_link_type = "SINGLE"
-            self._follow(r, urls[0], deadline)
+            self._follow(r, urls[0], deadline, use_browser)
         else:
             r.document_link_type = "MULTIPLE"     # never pick one at random
 
-    def _follow(self, r: URLAnalysisResult, doc_url: str, deadline: float) -> None:
+    def _follow(self, r: URLAnalysisResult, doc_url: str, deadline: float, use_browser: bool = False) -> None:
         """Analyse the single linked document exactly as if it had been given directly."""
         log.info("Following document URL: %s", doc_url)
-        sub = self._analyze_document(doc_url, deadline)
+        sub = self._analyze_document(doc_url, deadline, use_browser)
         if sub.status == "WORKING" and sub.content_type in DIRECT_TYPES:
             r.document_url = sub.final_url or doc_url
             r.page_count, r.language, r.last_modified = sub.page_count, sub.language, sub.last_modified
@@ -462,8 +600,11 @@ class URLAnalyzer:
     # ── batches ─────────────────────────────────────────────────────────────
     def analyze_batch(self, records: list[BookRecord],
                       on_result: Callable[[int, URLAnalysisResult], None] | None = None,
-                      force: bool = False) -> list[URLAnalysisResult]:
-        """Analyse many records concurrently (each distinct URL once). Results keep the input order."""
+                      force: bool = False, cancelled: Callable[[], bool] | None = None,
+                      use_browser: bool = False) -> list[URLAnalysisResult]:
+        """Analyse many records concurrently (each distinct URL once). Results keep the input order.
+        `cancelled()` returning True stops the batch: URLs not started yet are skipped (their entries stay None),
+        those already being checked finish."""
         results: list[URLAnalysisResult | None] = [None] * len(records)
         groups: dict[str, list[int]] = {}
         supplied: list[int] = []                     # records that come with the page's HTML: analysed individually
@@ -472,19 +613,34 @@ class URLAnalyzer:
         if not groups and not supplied:
             return []
         with ThreadPoolExecutor(max_workers=max(1, min(self.s.max_workers, len(groups) + len(supplied)))) as pool:
-            futures = {pool.submit(self.analyze, records[idxs[0]].url, force): idxs for idxs in groups.values()}
+            futures = {pool.submit(self.analyze, records[idxs[0]].url, force, use_browser): idxs for idxs in groups.values()}
             futures.update({pool.submit(self.analyze_html, records[i].url, records[i].page_html): [i] for i in supplied})
-            for fut in as_completed(futures):
-                try:
-                    base = fut.result()
-                except Exception as e:  # defensive: analyze() should never raise
-                    base = URLAnalysisResult(url="", error=f"Unexpected error: {str(e)[:120]}")
-                for i in futures[fut]:
-                    res = base.with_record(records[i])
-                    results[i] = res
-                    if on_result:
-                        on_result(i, res)
+            pending = set(futures)
+            stopping = False
+            while pending:
+                done, pending = wait(pending, timeout=0.3, return_when=FIRST_COMPLETED)
+                if cancelled and not stopping and cancelled():
+                    stopping = True
+                    for f in pending:
+                        f.cancel()                                   # only those that have not started are cancelled
+                for fut in done:
+                    if fut.cancelled():
+                        continue
+                    self._deliver(fut, futures[fut], records, results, on_result)
         return results  # type: ignore[return-value]
+
+    @staticmethod
+    def _deliver(fut, idxs, records, results, on_result) -> None:
+        """Hand the finished analysis of one URL to every record that carries that URL."""
+        try:
+            base = fut.result()
+        except Exception as e:  # defensive: analyze() should never raise
+            base = URLAnalysisResult(url="", error=f"Unexpected error: {str(e)[:120]}")
+        for i in idxs:
+            res = base.with_record(records[i])
+            results[i] = res
+            if on_result:
+                on_result(i, res)
 
 
 # ── module-level interface ──────────────────────────────────────────────────
@@ -506,9 +662,10 @@ def as_records(records: Records) -> list[BookRecord]:
 
 
 def analyze_urls(records: Records, *, analyzer: URLAnalyzer | None = None, force_refresh: bool = False,
-                 on_result: Callable[[int, URLAnalysisResult], None] | None = None) -> list[URLAnalysisResult]:
+                 on_result: Callable[[int, URLAnalysisResult], None] | None = None,
+                 cancelled: Callable[[], bool] | None = None, use_browser: bool = False) -> list[URLAnalysisResult]:
     """Analyse records (dicts with `url` and optional `document_id`, `book_title`, ... or BookRecords).
 
     The one entry point used by manual paste, Excel upload, the Daily Backlog hand-off and the CLI.
     """
-    return (analyzer or default_analyzer()).analyze_batch(as_records(records), on_result, force_refresh)
+    return (analyzer or default_analyzer()).analyze_batch(as_records(records), on_result, force_refresh, cancelled, use_browser)

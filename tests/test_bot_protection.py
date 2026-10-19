@@ -45,6 +45,15 @@ def test_known_challenge_pages_are_recognised(vendor, html):
     assert detect_bot_protection(html) == vendor
 
 
+def test_cloudflare_passive_beacon_on_a_normal_page_is_not_a_challenge():
+    beacon = ('<html><body><h1>Code</h1><ul><li>Title 1</li></ul><script>var a=document.createElement("iframe");'
+              'var s=document.createElement("script");s.src="/cdn-cgi/challenge-platform/scripts/jsd/main.js";</script></body></html>')
+    assert detect_bot_protection(beacon) == ""
+    a, _ = make_analyzer({PAGE: resp(beacon)})
+    r = a.analyze(PAGE)
+    assert (r.status, r.document_link_type) == ("WORKING", "NONE")                      # "no document", not BLOCKED
+
+
 def test_normal_pages_are_not_mistaken_for_challenges():
     for html in (REAL, "<html><title>Annual report</title><body>We enable JavaScript features. Cookies policy.</body></html>",
                  "<html><body>An article about Cloudflare and Radware products.</body></html>", "", None):

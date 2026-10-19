@@ -6,9 +6,11 @@ import uuid
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import parse_qsl
 
 import pandas as pd
 from flask import Blueprint, Response, jsonify, render_template, request, send_file
+from werkzeug.datastructures import MultiDict
 from werkzeug.utils import secure_filename
 
 from .. import transfer
@@ -221,6 +223,40 @@ def create_blueprint(upload_dir: str | Path, output_dir: str | Path) -> Blueprin
                             "source": {"tool": "backlog", "rid": rid, "report_date": format_report_date(data.report_date)}})
         log.info("Sent %d books to the URL Analysis Tool (%d blank, %d duplicate URLs skipped)", len(items), blank, dups)
         return jsonify({"transfer_id": tid, "count": len(items), "skipped_blank": blank, "duplicates_removed": dups})
+
+    @bp.route("/api/backlog/<rid>/send-to-base-templates", methods=["POST"])
+    def send_to_base_templates(rid: str):
+        """Hand books to Base Template Analysis: the selected ones ({"rows": [...]}) or, with {"filters": "<query string>"},
+        every book of the current view and filters. Books with no URL are kept so the comparison can flag them."""
+        rep = _get(rid)
+        if not rep:
+            return jsonify({"error": "This report is no longer available. Please generate it again."}), 404
+        body = request.get_json(silent=True) or {}
+        data = rep.data
+        if body.get("rows"):
+            wanted = {int(x) for x in body["rows"][:MAX_SELECT] if str(x).lstrip("-").isdigit()}
+            sub = data.export[data.export["_row"].isin(wanted)]
+            scope = "selected"
+        elif isinstance(body.get("filters"), str):
+            args = MultiDict(parse_qsl(body["filters"].lstrip("?"), keep_blank_values=False))
+            filtered = F.apply_filters(data.export, _spec(args), data.filter_cols)
+            view = args.get("view", "all")
+            sub = (filtered[F.view_mask(filtered, view)] if view in C.VIEW_CATEGORIES else filtered).head(MAX_SELECT)
+            scope = "filtered"
+        else:
+            return jsonify({"error": "Select at least one book first."}), 400
+        if sub.empty:
+            return jsonify({"error": "There are no books to send for this selection."}), 400
+        link = data.link_col
+        if not link:
+            return jsonify({"error": "The Power BI file has no source-link column, so there are no URLs to check."}), 400
+        text = lambda v: "" if is_blank(v) else str(v).strip()  # noqa: E731
+        records = [{"row": int(r["_row"]) + 1, "document_id": text(r[data.id_col]) if data.id_col else "", "domain": text(r[C.DOMAIN_COL]),
+                    "spidering_template": text(r[C.TEMPLATE_COL]), "url": text(r[link])} for _, r in sub.iterrows()]
+        name = f"Daily Backlog {format_report_date(data.report_date)}"
+        tid = transfer.put({"records": records, "source": {"tool": "backlog", "rid": rid, "name": name, "scope": scope}})
+        log.info("Sent %d backlog books (%s) to Base Template Analysis", len(records), scope)
+        return jsonify({"transfer_id": tid, "count": len(records), "scope": scope, "truncated": scope == "filtered" and len(sub) >= MAX_SELECT})
 
     @bp.route("/api/backlog/<rid>/query")
     def query(rid: str):

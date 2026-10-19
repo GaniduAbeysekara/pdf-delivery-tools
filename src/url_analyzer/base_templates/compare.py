@@ -246,7 +246,7 @@ def compare(ds_or_frame, mapping: dict, base_rows: list[dict], row_numbers: list
                 seen.append(it["template"])
         return seen
 
-    rows, doms = [], {}
+    rows = []
     cols = {k: frame[v].tolist() if v else [""] * len(frame) for k, v in mapping.items()}
     for i in range(len(frame)):
         url, tpl = text(cols["url"][i]), text(cols["spidering_template"][i])
@@ -274,37 +274,72 @@ def compare(ds_or_frame, mapping: dict, base_rows: list[dict], row_numbers: list
         for it in {id(m): m for m in matched}.values():
             it["documents"] += 1
         status = "Needs fix" if any(FLAGS[f][1] == "error" for f in flags) else ("Check" if flags else "OK")
-        rows.append({"source_row": row_numbers[i], "document_id": text(cols["document_id"][i]), "domain": host,
+        rows.append({"idx": i, "source_row": row_numbers[i], "document_id": text(cols["document_id"][i]), "domain": host,
                      "domain_from_url": from_url, "spidering_template": tpl, "url": url, "flags": flags, "status": status,
                      "match_type": match_type, "base_templates": names(matched), "base_count": len(names(matched))})
-        d = doms.setdefault(host, {"domain": host or "(none)", "rows": 0, "needs_fix": 0, "missing_url": 0, "missing_template": 0,
-                                   "base_templates": names(matched), "base_count": len(names(matched)), "match_type": match_type})
-        d["rows"] += 1
-        d["needs_fix"] += status == "Needs fix"
-        d["missing_url"] += "MISSING_URL" in flags
-        d["missing_template"] += "MISSING_SPIDER_TEMPLATE" in flags
 
-    for d in doms.values():
-        d["status"] = ("No domain" if d["domain"] == "(none)" else "No Base Template" if not d["base_count"]
-                       else "Needs fix" if d["needs_fix"] else "OK")
     for b in base:
         if b["hosts"] and not b["documents"]:
             b["flags"].append("BASE_NOT_USED")
-    domains = sorted(doms.values(), key=lambda d: (-d["needs_fix"], -d["rows"], d["domain"]))
+    domains = domain_summary(rows)
 
+    summary = build_summary(rows, domains, base, mapping, source)
+    return Comparison(rows, domains, base, summary)
+
+
+def domain_summary(rows: list[dict]) -> list[dict]:
+    """One line per domain: how many books are OK / to check / need fixing, and what is missing. Worst domains first."""
+    doms: dict[str, dict] = {}
+    for r in rows:
+        d = doms.setdefault(r["domain"], {"domain": r["domain"] or "(none)", "rows": 0, "ok": 0, "check": 0, "needs_fix": 0,
+                                          "missing_url": 0, "missing_template": 0, "base_templates": r["base_templates"],
+                                          "base_count": r["base_count"], "match_type": r["match_type"]})
+        d["rows"] += 1
+        d["ok"] += r["status"] == "OK"
+        d["check"] += r["status"] == "Check"
+        d["needs_fix"] += r["status"] == "Needs fix"
+        d["missing_url"] += "MISSING_URL" in r["flags"]
+        d["missing_template"] += "MISSING_SPIDER_TEMPLATE" in r["flags"]
+    for d in doms.values():
+        d["status"] = ("No domain" if d["domain"] == "(none)" else "No Base Template" if not d["base_count"]
+                       else "Needs fix" if d["needs_fix"] else "Check" if d["check"] else "OK")
+    return sorted(doms.values(), key=lambda d: (-d["needs_fix"], -d["rows"], d["domain"]))
+
+
+def build_summary(rows: list[dict], domains: list[dict], base: list[dict], mapping: dict, source: dict | None) -> dict:
     flag_counts = Counter(f for r in rows for f in r["flags"])
     base_flag_counts = Counter(f for b in base for f in b["flags"])
-    summary = {
+    return {
         "source": source or {}, "dataset_rows": len(rows), "base_rows": len(base),
         "rows_ok": sum(r["status"] == "OK" for r in rows), "rows_check": sum(r["status"] == "Check" for r in rows),
         "rows_needs_fix": sum(r["status"] == "Needs fix" for r in rows),
         "flags": {code: flag_counts.get(code, 0) for code in FLAGS},
         "base_flags": {code: base_flag_counts.get(code, 0) for code in BASE_FLAGS},
         "domains": len(domains), "domains_without_base": sum(d["status"] == "No Base Template" for d in domains),
+        "domains_ok": sum(d["status"] == "OK" for d in domains),
+        "domains_check": sum(d["status"] == "Check" for d in domains),
+        "domains_needs_fix": sum(d["status"] == "Needs fix" for d in domains),       # has a Base Template, but books to fix
+        "domains_no_domain": sum(d["status"] == "No domain" for d in domains),
         "domains_derived_from_url": sum(r["domain_from_url"] for r in rows),
         "mapping": mapping,
     }
+
+
+def subset_comparison(cmp: "Comparison", rows: list[dict]) -> "Comparison":
+    """The same report restricted to some rows (a selection or a filter): domains, Base Templates and totals are
+    recomputed for just those rows, so every sheet agrees with the rows that are shown."""
+    domains = domain_summary(rows)
+    used: Counter = Counter(n for r in rows for n in set(r["base_templates"]))
+    base = [{**b, "documents": used[b["template"]], "flags": [f for f in b["flags"] if f != "BASE_NOT_USED"]}
+            for b in cmp.base if used.get(b["template"])]
+    summary = build_summary(rows, domains, base, cmp.summary["mapping"], cmp.summary.get("source"))
     return Comparison(rows, domains, base, summary)
+
+
+def filter_domains(domains: list[dict], q: str = "", status: str = "") -> list[dict]:
+    q = q.lower().strip()
+    return [d for d in domains if (not status or d["status"] == status)
+            and (not q or q in d["domain"].lower() or any(q in t.lower() for t in d["base_templates"]))]
 
 
 def filter_rows(rows: list[dict], flag: str = "", status: str = "", q: str = "", domain: str = "") -> list[dict]:
